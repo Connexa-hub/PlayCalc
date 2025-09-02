@@ -25,7 +25,12 @@
     "web": {
       "favicon": "./assets/favicon.png"
     },
-    "plugins": [
-    ]
+    "plugins": [],
+    "extra": {
+      "eas": {
+        "projectId": "f8436d95-c601-4813-b055-90f81ea85d6c"
+      }
+    },
+    "owner": "connexa"
   }
 }
