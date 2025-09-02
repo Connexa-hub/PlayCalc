@@ -12,7 +12,6 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import { FlashList } from '@shopify/flash-list';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import * as Speech from 'expo-speech';
 import * as Location from 'expo-location';
 import { GestureHandlerRootView, Swipeable } from 'react-native-gesture-handler';
 import { useCurrencyMap } from '../hooks/useCurrencyMap';
@@ -151,13 +150,6 @@ const CurrencySearchScreen: React.FC = () => {
 
   const listRef = useRef<FlashList<string>>(null);
 
-  const handleVoiceSearch = () => {
-    Speech.speak('Say the currency you want to search', {
-      language: 'en',
-      onDone: () => setQuery('Naira'),
-    });
-  };
-
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaView style={styles.safeContainer}>
@@ -171,9 +163,6 @@ const CurrencySearchScreen: React.FC = () => {
             onChangeText={setQuery}
             returnKeyType="search"
           />
-          <TouchableOpacity onPress={handleVoiceSearch}>
-            <MaterialCommunityIcons name="microphone" size={24} color="#00e676" />
-          </TouchableOpacity>
         </View>
 
         {query.length > 0 && (
@@ -202,85 +191,5 @@ const CurrencySearchScreen: React.FC = () => {
     </GestureHandlerRootView>
   );
 };
-const styles = StyleSheet.create({
-  safeContainer: {
-    flex: 1,
-    backgroundColor: '#121212',
-    paddingHorizontal: 16,
-    paddingTop: 12,
-  },
-  searchRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  search: {
-    flex: 1,
-    backgroundColor: '#1e1e1e',
-    color: '#fff',
-    fontSize: 18,
-    padding: 12,
-    borderRadius: 12,
-    marginRight: 8,
-  },
-  clearButton: {
-    position: 'absolute',
-    top: 16,
-    right: 16,
-    zIndex: 10,
-  },
-  itemRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  item: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#333',
-    flex: 1,
-  },
-  flag: {
-    fontSize: 24,
-    marginRight: 12,
-  },
-  code: {
-    fontSize: 18,
-    color: '#fff',
-    fontWeight: '600',
-    marginRight: 12,
-  },
-  name: {
-    fontSize: 16,
-    color: '#aaa',
-  },
-  highlight: {
-    color: '#00e676',
-    fontWeight: '700',
-  },
-  noResults: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingBottom: 40,
-  },
-  noText: {
-    fontSize: 18,
-    color: '#aaa',
-  },
-  deleteBox: {
-    backgroundColor: '#ff4444',
-    justifyContent: 'center',
-    alignItems: 'center',
-    width: 100,
-    height: '100%',
-    borderRadius: 8,
-  },
-  deleteText: {
-    color: '#fff',
-    fontWeight: '600',
-  },
-});
+
 export default CurrencySearchScreen;
