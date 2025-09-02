@@ -37,7 +37,9 @@ jobs:
           ./gradlew assembleRelease
 
       - name: Upload APK artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: app-release.apk
           path: android/app/build/outputs/apk/release/app-release.apk
+          compression-level: 6
+          retention-days: 7
