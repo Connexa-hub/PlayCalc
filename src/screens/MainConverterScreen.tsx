@@ -11,15 +11,19 @@ import {
   SafeAreaView,
   Animated,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Toast from 'react-native-root-toast';
 import { useCurrencyMap } from '../hooks/useCurrencyMap';
 import { useCurrencyTargets } from '../context/CurrencyContext';
+import CurrencyLoader from '../components/CurrencyLoader';
+
+const API_KEY = 'f9bd7653dd13a8e88a4fa2f8';
 
 const MainConverterScreen: React.FC = () => {
   const navigation = useNavigation();
+  const route = useRoute();
   const currencyMap = useCurrencyMap();
   const { targets, setTargets } = useCurrencyTargets();
 
@@ -29,6 +33,39 @@ const MainConverterScreen: React.FC = () => {
   const [baseCurrency, setBaseCurrency] = useState('NGN');
   const [loading, setLoading] = useState(false);
   const spinAnim = useRef(new Animated.Value(0)).current;
+  const [supportedSymbols, setSupportedSymbols] = useState<string[]>([]);
+  const [showError, setShowError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (currencyMap && Object.keys(currencyMap).length > 0) {
+      setSupportedSymbols(Object.keys(currencyMap));
+    }
+  }, [currencyMap]);
+
+  // Track selected currency for each card.
+  const [cardCurrencies, setCardCurrencies] = useState<string[]>([baseCurrency, ...targets.filter((c) => c !== baseCurrency)]);
+
+  useEffect(() => {
+    setCardCurrencies([baseCurrency, ...targets.filter((c) => c !== baseCurrency)]);
+  }, [baseCurrency, targets]);
+
+  useEffect(() => {
+    if (route.params && route.params.selectedCurrency !== undefined && route.params.index !== undefined) {
+      const { selectedCurrency, index } = route.params as any;
+      if (selectedCurrency && typeof index === 'number') {
+        if (index === 0) {
+          setBaseCurrency(selectedCurrency);
+        } else {
+          setCardCurrencies((prev) => {
+            const updated = [...prev];
+            updated[index] = selectedCurrency;
+            return updated;
+          });
+        }
+        navigation.setParams({ selectedCurrency: undefined, index: undefined });
+      }
+    }
+  }, [route.params, navigation]);
 
   const saveRatesToCache = async (rates: any, date: string) => {
     try {
@@ -52,7 +89,7 @@ const MainConverterScreen: React.FC = () => {
   };
 
   const fetchRates = async () => {
-    if (loading) return;
+    if (loading || supportedSymbols.length === 0) return;
     setLoading(true);
     Animated.loop(
       Animated.timing(spinAnim, {
@@ -63,26 +100,24 @@ const MainConverterScreen: React.FC = () => {
     ).start();
 
     try {
-      const symbols = Object.keys(currencyMap).join(',');
-      const res = await fetch(
-        `https://api.exchangerate.host/latest?base=${baseCurrency}&symbols=${symbols}`
-      );
+      const url = `https://v6.exchangerate-api.com/v6/${API_KEY}/latest/${baseCurrency}`;
+      const res = await fetch(url);
       const data = await res.json();
-      if (data?.rates) {
-        setRates(data.rates);
-        setLastUpdated(data.date);
-        saveRatesToCache(data.rates, data.date);
+      if (data?.result === 'success' && data.conversion_rates) {
+        setRates(data.conversion_rates);
+        setLastUpdated(data.time_last_update_utc || "");
+        saveRatesToCache(data.conversion_rates, data.time_last_update_utc || "");
+        setShowError(null);
         Toast.show('Exchange rates updated', {
           duration: Toast.durations.SHORT,
           position: Toast.positions.BOTTOM,
         });
+      } else {
+        setShowError(data?.error_type || "Exchange rates could not be loaded.");
+        loadRatesFromCache();
       }
     } catch (err) {
-      console.error('Failed to fetch rates:', err);
-      Toast.show('Failed to update rates', {
-        duration: Toast.durations.SHORT,
-        position: Toast.positions.BOTTOM,
-      });
+      setShowError("Failed to fetch exchange rates.");
       loadRatesFromCache();
     } finally {
       setLoading(false);
@@ -92,10 +127,10 @@ const MainConverterScreen: React.FC = () => {
   };
 
   useEffect(() => {
-    if (Object.keys(currencyMap).length > 0) {
+    if (supportedSymbols.length > 0) {
       fetchRates();
     }
-  }, [baseCurrency]);
+  }, [baseCurrency, supportedSymbols]);
 
   const convert = (rate: number) => {
     const num = parseFloat(amount);
@@ -117,14 +152,27 @@ const MainConverterScreen: React.FC = () => {
     outputRange: ['0deg', '360deg'],
   });
 
-  if (!currencyMap || Object.keys(currencyMap).length === 0) {
+  if (showError) {
     return (
       <SafeAreaView style={styles.safeContainer}>
         <StatusBar barStyle="light-content" backgroundColor="#121212" />
-        <Text style={{ color: '#fff', padding: 20 }}>Loading currencies...</Text>
+        <Text style={{ color: 'red', padding: 20 }}>{showError}</Text>
       </SafeAreaView>
     );
   }
+
+  if (!currencyMap || Object.keys(currencyMap).length === 0 || supportedSymbols.length === 0) {
+    return (
+      <SafeAreaView style={styles.safeContainer}>
+        <StatusBar barStyle="light-content" backgroundColor="#121212" />
+        <View style={styles.loaderContainer}>
+          <CurrencyLoader />
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  const displayCardCurrencies = cardCurrencies.filter(code => supportedSymbols.includes(code));
 
   return (
     <SafeAreaView style={styles.safeContainer}>
@@ -146,20 +194,21 @@ const MainConverterScreen: React.FC = () => {
       />
 
       <ScrollView contentContainerStyle={styles.cardContainer}>
-        {[baseCurrency, ...targets.filter((c) => c !== baseCurrency)].map((code, index) => {
+        {displayCardCurrencies.map((code, index) => {
           const currency = currencyMap[code];
           if (!currency) return null;
-
+          const rate = code === baseCurrency ? 1 : rates[code];
           return (
             <TouchableOpacity key={index} onPress={() => handleCardPress(code)}>
               <View style={styles.card}>
                 <View style={styles.cardTop}>
-                  <Text style={styles.flag}>{currency.flag || '❓'}</Text>
+                  <Text style={styles.flag}>{currency.flag || '💱'}</Text>
                   <Text style={styles.code}>{code}</Text>
                   <TouchableOpacity
                     onPress={() =>
                       navigation.navigate('CurrencySelection', {
                         index,
+                        currentCurrency: code,
                       })
                     }
                   >
@@ -167,10 +216,10 @@ const MainConverterScreen: React.FC = () => {
                   </TouchableOpacity>
                 </View>
                 <Text style={styles.value}>
-                  {amount === '' ? '0.00' : convert(rates[code] || 0)} {code}
+                  {rate ? convert(rate) : "--"} {code}
                 </Text>
                 <Text style={styles.ratePreview}>
-                  1 {baseCurrency} = {(rates[code] || 0).toFixed(6)} {code}
+                  1 {baseCurrency} = {rate ? rate.toFixed(6) : "--"} {code}
                 </Text>
               </View>
             </TouchableOpacity>
@@ -193,12 +242,18 @@ const MainConverterScreen: React.FC = () => {
     </SafeAreaView>
   );
 };
+
 const styles = StyleSheet.create({
   safeContainer: {
     flex: 1,
     backgroundColor: '#121212',
     paddingHorizontal: 16,
     paddingTop: 12,
+  },
+  loaderContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   header: {
     flexDirection: 'row',
