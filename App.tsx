@@ -5,6 +5,7 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import Calculator from './src/screens/Calculator';
 import ProfessionalCalculator from './src/screens/ProfessionalCalculator';
@@ -59,13 +60,15 @@ function MainStack() {
 
 export default function App() {
   return (
-    <CurrencyProvider>
-      <PaperProvider>
-        <StatusBar barStyle="light-content" backgroundColor="#121212" />
-        <NavigationContainer>
-          <MainStack />
-        </NavigationContainer>
-      </PaperProvider>
-    </CurrencyProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <CurrencyProvider>
+        <PaperProvider>
+          <StatusBar barStyle="light-content" backgroundColor="#121212" />
+          <NavigationContainer>
+            <MainStack />
+          </NavigationContainer>
+        </PaperProvider>
+      </CurrencyProvider>
+    </GestureHandlerRootView>
   );
 }
