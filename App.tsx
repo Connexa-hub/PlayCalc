@@ -17,28 +17,6 @@ import { CurrencyProvider } from './src/context/CurrencyContext';
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
 
-function TabNavigator() {
-  return (
-    <Tab.Navigator
-      screenOptions={({ route }) => ({
-        headerShown: false,
-        tabBarStyle: { backgroundColor: '#121212', borderTopWidth: 0 },
-        tabBarActiveTintColor: '#00e676',
-        tabBarInactiveTintColor: '#aaa',
-        tabBarIcon: ({ color, size }) => {
-          let iconName = 'calculator';
-          if (route.name === 'Calculator') iconName = 'calculator-variant';
-          if (route.name === 'Converter') iconName = 'currency-usd';
-          return <MaterialCommunityIcons name={iconName} color={color} size={size} />;
-        },
-      })}
-    >
-      <Tab.Screen name="Calculator" component={Calculator} />
-      <Tab.Screen name="Converter" component={ConverterStack} />
-    </Tab.Navigator>
-  );
-}
-
 function ConverterStack() {
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
@@ -49,11 +27,55 @@ function ConverterStack() {
   );
 }
 
+function TabNavigator() {
+  return (
+    <Tab.Navigator
+      screenOptions={({ route }) => ({
+        headerShown: false,
+        tabBarShowLabel: false,
+        tabBarStyle: {
+          backgroundColor: '#121212',
+          borderTopWidth: 0,
+          height: 50,
+        },
+        tabBarActiveTintColor: '#00e676',
+        tabBarInactiveTintColor: '#aaa',
+        tabBarIcon: ({ color }) => {
+          let iconName = 'calculator';
+          if (route.name === 'Calculator') iconName = 'calculator-variant';
+          if (route.name === 'Converter') iconName = 'currency-usd';
+          return <MaterialCommunityIcons name={iconName} color={color} size={26} />;
+        },
+      })}
+    >
+      {/* ✅ Tab bar visible on Calculator */}
+      <Tab.Screen name="Calculator" component={Calculator} />
+
+      {/* ✅ Tab bar hidden on Converter stack */}
+      <Tab.Screen
+        name="Converter"
+        component={ConverterStack}
+        options={{
+          tabBarStyle: { display: 'none', height: 0 },
+        }}
+      />
+    </Tab.Navigator>
+  );
+}
+
 function MainStack() {
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       <Stack.Screen name="Tabs" component={TabNavigator} />
-      <Stack.Screen name="ProfessionalCalculator" component={ProfessionalCalculator} />
+
+      {/* ✅ Tab bar hidden on Professional Calculator */}
+      <Stack.Screen
+        name="ProfessionalCalculator"
+        component={ProfessionalCalculator}
+        options={{
+          presentation: 'modal',
+        }}
+      />
     </Stack.Navigator>
   );
 }

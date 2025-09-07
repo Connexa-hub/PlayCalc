@@ -1,84 +1,66 @@
-// Import React and hooks for state, effect, refs
+// src/screens/ProfessionalCalculator.tsx
 import React, { useState, useEffect, useRef } from 'react';
-// Import React Native core components and APIs
 import {
-  View, // Container view
-  StyleSheet, // For styling
-  SafeAreaView, // For safe area on devices
-  StatusBar, // Status bar control
-  ScrollView, // For scrolling content
-  TouchableOpacity, // For touchable buttons
-  Text, // For text display
-  Animated, // For animations
-  PanResponder, // For gesture (swipe) handling
-  Dimensions, // For getting device screen size
-  Modal, // For modal dialogs
-  TextInput, // For text input fields
-  Platform, // For platform-specific code
-  AppState, // For app state changes
+  View,
+  StyleSheet,
+  SafeAreaView,
+  StatusBar,
+  ScrollView,
+  TouchableOpacity,
+  Text,
+  Animated,
+  PanResponder,
+  Dimensions,
+  Modal,
+  TextInput,
+  Platform,
+  AppState,
 } from 'react-native';
-// Import icon set
-import { MaterialIcons } from '@expo/vector-icons';
-// Import Math.js library for calculator logic
+import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { create, all } from 'mathjs';
-// Async storage for saving history
 import AsyncStorage from '@react-native-async-storage/async-storage';
-// APIs for screen orientation, file system, and sharing
 import * as ScreenOrientation from 'expo-screen-orientation';
 import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
+import { useNavigation } from '@react-navigation/native';
 
-// Create a mathjs instance
 const math = create(all);
-// Get screen height and width (for layout and swipe calculations)
 const { height: SCREEN_HEIGHT, width: SCREEN_WIDTH } = Dimensions.get('window');
 
-// Define calculator button layouts as constants
 const NUMERIC_GRID = [['7','8','9'],['4','5','6'],['1','2','3'],['0','.']];
 const ARITHMETIC_STACK = ['+', '−', '×', '÷'];
 const SCIENTIFIC_GRID = [['sin','cos','tan'],['log','ln','√'],['x^y','1/x','π'],['(',')','C']];
 
-// Helper function to get initials from a string (used for avatar)
 function getInitials(str: string) {
   if (!str) return '';
   return str.split(' ').map(s => s[0]).join('').slice(0, 2).toUpperCase();
 }
 
-// Predefined avatar colors for history cards
 const AVATAR_COLORS = ['#81c784', '#64b5f6', '#ffb74d', '#ff8a65', '#ba68c8', '#ffd54f', '#4db6ac'];
-// Helper to get avatar color based on a string
 function getAvatarColor(str: string) {
   let hash = 0;
   for (let i = 0; i < str.length; i++) hash += str.charCodeAt(i);
   return AVATAR_COLORS[hash % AVATAR_COLORS.length];
 }
 
-// SwipeableHistoryItem handles swipe gestures for history cards
 export const SwipeableHistoryItem = ({
-  entry, // History entry object
-  index, // Index in history array
-  onResume, // Callback to resume a calculation
-  onDelete, // Callback to delete entry
-  onPin, // Callback to pin/unpin entry
-  setSelectedIndex, // For modal selection
-  setModalVisible, // For modal control
+  entry,
+  index,
+  onResume,
+  onDelete,
+  onPin,
+  setSelectedIndex,
+  setModalVisible,
   setTempName
 }) => {
-  // Animated value for X (horizontal swipe position)
   const animX = useRef(new Animated.Value(0)).current;
-  // Animated value for delete icon animation
   const deleteIconAnim = useRef(new Animated.Value(0)).current;
-  // Local state to track if a card is being removed (prevents stuck cards)
   const [isRemoving, setIsRemoving] = useState(false);
-  // Local state for swipe direction
   const [swiping, setSwiping] = useState<null | 'left' | 'right'>(null);
 
-  // Swipe threshold (how far to swipe to trigger action)
   const swipeThreshold = SCREEN_WIDTH * 0.28;
-  // Minimum swipe velocity for fast swipe
   const fastSwipe = 0.5;
 
-  // Reset animation and local state whenever entry changes (prevents stuck cards)
   useEffect(() => {
     animX.setValue(0);
     deleteIconAnim.setValue(0);
@@ -86,20 +68,17 @@ export const SwipeableHistoryItem = ({
     setIsRemoving(false);
   }, [entry.pinned, entry.input, entry.result, entry.name, entry.timestamp]);
 
-  // Animate delete icon translation (for trash effect)
   const deleteIconTranslate = deleteIconAnim.interpolate({
     inputRange: [0, 1],
     outputRange: [0, 40],
   });
-  // Animate delete icon opacity
   const deleteIconOpacity = deleteIconAnim.interpolate({
     inputRange: [0, 1],
     outputRange: [1, 0.2],
   });
 
-  // Function to animate card out and then remove (delete)
   const animateDeleteAndRemove = () => {
-    setIsRemoving(true); // Block further interaction
+    setIsRemoving(true);
     Animated.parallel([
       Animated.timing(animX, {
         toValue: -SCREEN_WIDTH,
@@ -112,19 +91,18 @@ export const SwipeableHistoryItem = ({
         useNativeDriver: true,
       }),
     ]).start(() => {
-      onDelete(index); // Remove AFTER animation
+      onDelete(index);
     });
   };
 
-  // PanResponder handles gesture detection for swipe
   const panResponder = useRef(
     PanResponder.create({
-      onStartShouldSetPanResponder: () => !isRemoving, // Only respond if not removing
+      onStartShouldSetPanResponder: () => !isRemoving,
       onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dx) > 6 && !isRemoving,
       onPanResponderGrant: () => {
         if (isRemoving) return;
         animX.stopAnimation();
-        animX.setOffset(animX.__getValue());
+        animX.setOffset(animX._value);
         animX.setValue(0);
         setSwiping(null);
       },
@@ -138,7 +116,6 @@ export const SwipeableHistoryItem = ({
         if (isRemoving) return;
         animX.flattenOffset();
 
-        // Swipe right to pin/unpin
         if ((g.dx > swipeThreshold) || (g.vx > fastSwipe)) {
           Animated.spring(animX, {
             toValue: 0,
@@ -146,11 +123,9 @@ export const SwipeableHistoryItem = ({
             bounciness: 8,
           }).start(() => onPin(index));
         }
-        // Swipe left to delete (only if not pinned)
         else if ((g.dx < -swipeThreshold || g.vx < -fastSwipe) && !entry.pinned) {
           animateDeleteAndRemove();
         }
-        // Shake if pinned and trying to delete
         else if ((g.dx < -swipeThreshold || g.vx < -fastSwipe) && entry.pinned) {
           Animated.sequence([
             Animated.timing(animX, { toValue: -30, duration: 80, useNativeDriver: true }),
@@ -158,7 +133,6 @@ export const SwipeableHistoryItem = ({
             Animated.timing(animX, { toValue: 0, duration: 80, useNativeDriver: true }),
           ]).start();
         }
-        // Otherwise, return to center
         else {
           Animated.spring(animX, {
             toValue: 0,
@@ -172,24 +146,19 @@ export const SwipeableHistoryItem = ({
     })
   ).current;
 
-  // Get avatar color and text based on entry
   const avatarColor = getAvatarColor(entry.name || entry.input || '');
   const avatarText = getInitials(entry.name || entry.input || '');
 
-  // Don't render card if removing (animation in progress)
   if (isRemoving) return null;
 
-  // Render the card and swipe backgrounds
   return (
     <View style={historyStyles.rowContainer}>
-      {/* Swipe right background for pin/unpin */}
       {swiping === 'right' &&
         <View style={[historyStyles.actionBg, historyStyles.pinAction]}>
           <MaterialIcons name="push-pin" size={24} color="#fff" style={{ marginRight: 6 }} />
           <Text style={historyStyles.actionText}>{entry.pinned ? 'Unpin' : 'Pin'}</Text>
         </View>
       }
-      {/* Swipe left background for delete */}
       {swiping === 'left' &&
         <View style={[historyStyles.actionBg, historyStyles.deleteAction]}>
           <Animated.View style={{
@@ -205,7 +174,6 @@ export const SwipeableHistoryItem = ({
           </Animated.View>
         </View>
       }
-      {/* Animated card with gesture handlers */}
       <Animated.View
         {...panResponder.panHandlers}
         style={[
@@ -239,43 +207,33 @@ export const SwipeableHistoryItem = ({
   );
 };
 
-// Main calculator component
 const ProfessionalCalculator = () => {
-  // Calculator input state
   const [input, setInput] = useState('');
-  // Calculator result state
   const [result, setResult] = useState('');
-  // State for just-evaluated flag
   const [justEvaluated, setJustEvaluated] = useState(false);
-  // Calculation history array
   const [history, setHistory] = useState([]);
-  // State for history panel open/close
   const [panelOpen, setPanelOpen] = useState(false);
-  // Angle mode state ('rad' or 'deg')
   const [angleMode, setAngleMode] = useState('rad');
-  // Modal visibility for naming history entry
   const [modalVisible, setModalVisible] = useState(false);
-  // Selected index for naming modal
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
-  // Temporary name for modal input
   const [tempName, setTempName] = useState('');
-  // Swipe action state (not used in swipeable card, but kept)
   const [swipeAction, setSwipeAction] = useState<{[key:number]: 'pin'|'delete'|null}>({});
-  // State for three-dot menu
   const [menuVisible, setMenuVisible] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
 
-  // Ref for angle mode (for mathjs custom functions)
   const angleModeRef = useRef('rad');
-  // Scope for mathjs evaluation
   const scope = useState({})[0];
-  // Animated value for history panel open/close
   const panelAnim = useRef(new Animated.Value(0)).current;
-  // Animated value for angle mode opacity
-  const modeOpacity = useRef(new Animated.Value(1)).current;
-  // Ref to store initial panel position for gestures
+  const modeRotation = useRef(new Animated.Value(0)).current;
   const initialPanelValue = useRef(0);
 
-  // Effect to lock orientation and load history on mount
+  const navigation = useNavigation();
+
+  const rotate = modeRotation.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0deg', '180deg'],
+  });
+
   useEffect(() => {
     ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.LANDSCAPE);
     loadHistory();
@@ -285,7 +243,6 @@ const ProfessionalCalculator = () => {
     };
   }, []);
 
-  // Effect to handle app state changes for persisting current state
   useEffect(() => {
     const subscription = AppState.addEventListener('change', nextAppState => {
       if (nextAppState.match(/inactive|background/)) {
@@ -297,7 +254,6 @@ const ProfessionalCalculator = () => {
     };
   }, [input, result, justEvaluated]);
 
-  // Effect to override mathjs trig functions with custom angle mode
   useEffect(() => {
     const customSin = (angle:number) => {
       const rad = angleModeRef.current === 'deg' ? math.unit(angle,'deg').toNumber('rad') : angle;
@@ -314,7 +270,6 @@ const ProfessionalCalculator = () => {
     math.import({ sin: customSin, cos: customCos, tan: customTan }, { override: true });
   }, []);
 
-  // Load history from AsyncStorage
   const loadHistory = async () => {
     const stored = await AsyncStorage.getItem('calcHistory');
     if (stored) {
@@ -322,13 +277,12 @@ const ProfessionalCalculator = () => {
         ...entry,
         pinned: entry.pinned ?? false,
         name: entry.name ?? '',
-        id: entry.id || (entry.timestamp + Math.random().toString(36).slice(2)) // Ensure unique id
+        id: entry.id || (entry.timestamp + Math.random().toString(36).slice(2))
       }));
       setHistory(parsed);
     }
   };
 
-  // Load current state from AsyncStorage
   const loadCurrent = async () => {
     const stored = await AsyncStorage.getItem('calcCurrent');
     if (stored) {
@@ -339,12 +293,10 @@ const ProfessionalCalculator = () => {
     }
   };
 
-  // Save current state to AsyncStorage
   const saveCurrent = async () => {
     await AsyncStorage.setItem('calcCurrent', JSON.stringify({ input, result, justEvaluated }));
   };
 
-  // Save a calculation to history with unique id
   const saveToHistory = async (expr:string, res:string) => {
     if (!expr || !res || res === 'Error' || (history[0]?.input === expr && history[0]?.result === res)) return;
     const timestamp = new Date().toLocaleString();
@@ -356,17 +308,15 @@ const ProfessionalCalculator = () => {
       name: '',
       id: Date.now().toString() + Math.random().toString(36).slice(2)
     };
-    const updated = [newEntry, ...history].slice(0,20);
+    const updated = [newEntry, ...history];
     setHistory(updated);
     await AsyncStorage.setItem('calcHistory', JSON.stringify(updated));
   };
 
-  // Update history in AsyncStorage
   const updateHistoryStorage = async () => {
     await AsyncStorage.setItem('calcHistory', JSON.stringify(history));
   };
 
-  // Handle calculator button clicks
   const handleClick = (val:string) => {
     if(val==='C'){
       if(input && result) saveToHistory(input,result||'—');
@@ -374,7 +324,7 @@ const ProfessionalCalculator = () => {
     }
     else if(val==='DEL'){ setInput(prev=>prev.slice(0,-1)); }
     else if(val==='='){ handleEquals(); }
-    else if(val==='x^y'){ 
+    else if(val==='x^y'){
       if (justEvaluated) {
         setInput(result + '^');
         setResult('');
@@ -383,14 +333,14 @@ const ProfessionalCalculator = () => {
         setInput(prev=>prev+'^');
       }
     }
-    else if(val==='1/x'){ 
+    else if(val==='1/x'){
       const base = justEvaluated ? result : input;
       setInput('1/('+base+')');
       setResult('');
       setJustEvaluated(false);
     }
     else if(['sin','cos','tan','log','ln','√'].includes(val)){
-      const mapped = val==='√'?'sqrt':val; 
+      const mapped = val==='√'?'sqrt':val;
       if (justEvaluated) {
         setInput(mapped + '(');
         setResult('');
@@ -398,7 +348,7 @@ const ProfessionalCalculator = () => {
       } else {
         setInput(prev=>prev+mapped+'(');
       }
-    }else if(val==='π'){ 
+    }else if(val==='π'){
       if (justEvaluated) {
         setInput('π');
         setResult('');
@@ -407,7 +357,7 @@ const ProfessionalCalculator = () => {
         setInput(prev=>prev+'π');
       }
     }
-    else if(val==='('||val===')'){ 
+    else if(val==='('||val===')'){
       if (justEvaluated) {
         setInput(val);
         setResult('');
@@ -426,22 +376,20 @@ const ProfessionalCalculator = () => {
     else{ const calcVal = val==='×'? '*':val==='÷'? '/':val==='−'?'-':val; setInput(prev=>prev+calcVal);}
   };
 
-  // Handle equals button (=)
   const handleEquals = () => {
     if(!input || /^[\d.]+$/.test(input)){ setResult(''); return; }
     let expr = input.replace(/π/g, Math.PI.toString()).replace(/√/g,'sqrt').replace(/log/g,'log10');
-    try{ 
-      const res = math.evaluate(expr,scope); 
+    try{
+      const res = math.evaluate(expr,scope);
       const resStr = res.toString();
-      setResult(resStr); 
-      scope.ans=res; 
+      setResult(resStr);
+      scope.ans=res;
       setJustEvaluated(true);
       saveToHistory(input, resStr);
     }
     catch(e){ setResult('Error');}
   };
 
-  // Delete a history entry (only if not pinned)
   const handleDelete = (index:number) => {
     if (history[index].pinned) return;
     const updated = [...history];
@@ -450,7 +398,6 @@ const ProfessionalCalculator = () => {
     updateHistoryStorage();
   };
 
-  // Pin/unpin a history entry
   const handlePin = (index:number) => {
     const updated = [...history];
     updated[index].pinned=!updated[index].pinned;
@@ -458,7 +405,6 @@ const ProfessionalCalculator = () => {
     updateHistoryStorage();
   };
 
-  // Save a custom name for a history entry
   const handleSaveName = () => {
     if(selectedIndex!==null){
       const updated = [...history];
@@ -469,19 +415,16 @@ const ProfessionalCalculator = () => {
     setModalVisible(false);
   };
 
-  // Animate open history panel
   const openPanel = () => {
     setPanelOpen(true);
     Animated.timing(panelAnim,{toValue:SCREEN_HEIGHT,duration:300,useNativeDriver:false}).start();
   };
 
-  // Animate close history panel
   const closePanel = () => {
     setPanelOpen(false);
     Animated.timing(panelAnim,{toValue:0,duration:300,useNativeDriver:false}).start();
   };
 
-  // PanResponder for pull-to-open/close history panel
   const panResponder = useRef(PanResponder.create({
     onStartShouldSetPanResponder:()=>true,
     onPanResponderGrant:()=>initialPanelValue.current=panelAnim._value,
@@ -495,15 +438,13 @@ const ProfessionalCalculator = () => {
     }
   })).current;
 
-  // Animate angle mode text opacity
   const handleSetAngleMode = (newMode:string) => {
-    Animated.timing(modeOpacity,{toValue:0,duration:200,useNativeDriver:true}).start(()=>{
+    Animated.timing(modeRotation,{toValue:1,duration:200,useNativeDriver:true}).start(()=>{
       setAngleMode(newMode); angleModeRef.current=newMode;
-      Animated.timing(modeOpacity,{toValue:1,duration:200,useNativeDriver:true}).start();
+      modeRotation.setValue(0);
     });
   };
 
-  // Render a calculator grid button
   const renderKey = (val:string,labelStyle:any) => (
     <TouchableOpacity key={val} onPress={()=>handleClick(val)} style={[styles.key,val==='C'?styles.clearKey:{}]}>
       <Text style={val==='C'?styles.clearKeyLabel:labelStyle}>{val}</Text>
@@ -517,13 +458,18 @@ const ProfessionalCalculator = () => {
     await Sharing.shareAsync(uri, { mimeType: 'text/plain', dialogTitle: 'Share Calculation History' });
   };
 
-  // Render history panel header (Google Messages style)
   const renderHistoryHeader = () => (
     <View style={historyStyles.historyHeader}>
       <TouchableOpacity onPress={closePanel} style={historyStyles.headerIcon}>
         <MaterialIcons name="arrow-back" size={26} color="#222" />
       </TouchableOpacity>
-      <Text style={historyStyles.headerTitle}>History</Text>
+      <TextInput
+        style={historyStyles.searchInput}
+        placeholder="Search history..."
+        placeholderTextColor="#888"
+        value={searchQuery}
+        onChangeText={setSearchQuery}
+      />
       <View style={historyStyles.headerIconsRight}>
         <TouchableOpacity onPress={shareHistory} style={historyStyles.headerIcon}>
           <MaterialIcons name="share" size={24} color="#222" />
@@ -548,20 +494,18 @@ const ProfessionalCalculator = () => {
     </View>
   );
 
-  // Main render function
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="#121212"/>
-      {/* History Panel */}
       <Animated.View style={[historyStyles.historyPanel, {height: panelAnim}]}>
         {renderHistoryHeader()}
         <View {...panResponder.panHandlers} style={historyStyles.pullDash}/>
         <ScrollView style={historyStyles.historyScroll} contentContainerStyle={{paddingBottom:30}}>
-          {/* Show message if no history */}
           {history.length === 0 ? (
             <Text style={historyStyles.emptyText}>No calculation history.</Text>
           ) : (() => {
-            const sortedHistory = [...history].sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0));
+            const filteredHistory = history.filter(h => (h.name || h.input).toLowerCase().includes(searchQuery.toLowerCase()));
+            const sortedHistory = [...filteredHistory].sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0));
             return sortedHistory.map((h) =>
               <SwipeableHistoryItem
                 key={h.id || h.timestamp}
@@ -579,19 +523,20 @@ const ProfessionalCalculator = () => {
         </ScrollView>
       </Animated.View>
 
-      {/* Calculator display box */}
       <View style={styles.displayBox}>
-        <TouchableOpacity style={{position:'absolute',left:10,bottom:70}} onPress={openPanel}>
+        <TouchableOpacity style={[styles.iconButton, {position:'absolute',left:10,bottom:90}]} onPress={openPanel}>
           <MaterialIcons name="history" size={24} color="#fff"/>
         </TouchableOpacity>
-        <TouchableOpacity style={{position:'absolute',left:10,bottom:40}} onPress={()=>handleSetAngleMode(angleMode==='rad'?'deg':'rad')}>
-          <Animated.Text style={{color:'#fff',fontSize:20,opacity:modeOpacity}}>{angleMode.toUpperCase()}</Animated.Text>
+        <TouchableOpacity style={[styles.iconButton, {position:'absolute',left:10,bottom:50}]} onPress={() => navigation.navigate('Calculator')}>
+          <MaterialCommunityIcons name="calculator" size={24} color="#fff" />
+        </TouchableOpacity>
+        <TouchableOpacity style={[styles.iconButton, {position:'absolute',left:10,bottom:10}]} onPress={()=>handleSetAngleMode(angleMode==='rad'?'deg':'rad')}>
+          <Animated.Text style={{color:'#fff',fontSize:20, transform: [{rotate}]}}>{angleMode.toUpperCase()}</Animated.Text>
         </TouchableOpacity>
         {input!=='' && <TouchableOpacity onPress={()=>setJustEvaluated(false)}><Text style={styles.inputText}>{input}</Text></TouchableOpacity>}
         {result!=='' && <Text style={styles.resultText}>{result}</Text>}
       </View>
 
-      {/* Calculator grid */}
       <View style={styles.gridRow}>
         <View style={styles.numericColumn}>
           {NUMERIC_GRID.map((row,rowIndex)=><View style={styles.row} key={rowIndex}>{row.map(v=>renderKey(v,styles.numericKeyLabel))}</View>)}
@@ -615,7 +560,6 @@ const ProfessionalCalculator = () => {
         </View>
       </View>
 
-      {/* Modal for naming history entry */}
       <Modal animationType="fade" transparent visible={modalVisible} onRequestClose={()=>setModalVisible(false)}>
         <View style={styles.modalOverlay}>
           <View style={styles.modalView}>
@@ -631,30 +575,35 @@ const ProfessionalCalculator = () => {
   );
 };
 
-// --- App styles ---
 const styles = StyleSheet.create({
-  container:{flex:1,backgroundColor:'#121212',paddingLeft: 35,paddingRight:35,paddingHorizontal:8,paddingVertical:6},
-  displayBox:{backgroundColor:'#1a1a1a',borderRadius:10,padding:20,paddingLeft: 10,paddingRight: 10,marginBottom:10,height:125,justifyContent:'flex-end'},
+  container:{flex:1,backgroundColor:'#121212',paddingHorizontal:8,paddingVertical:6},
+  displayBox:{backgroundColor:'#1a1a1a',borderRadius:10,padding:20,marginBottom:10,height:125,justifyContent:'flex-end'},
   inputText:{fontSize:26,color:'#fff',fontWeight:'500',textAlign:'right'},
   resultText:{fontSize:20,color:'#00e676',fontWeight:'400',textAlign:'right',marginTop:4},
   gridRow:{flexDirection:'row',justifyContent:'space-between',flex:1},
-  numericColumn:{flex:0.6,marginHorizontal:2,paddingRight:5,justifyContent:'space-evenly',paddingBottom:16},
+  numericColumn:{flex:0.6,marginHorizontal:2,justifyContent:'space-evenly',paddingBottom:16},
   centerGrid:{flexDirection:'row',flex:0.3,justifyContent:'space-between',marginHorizontal:2},
-  scientificColumn:{flex:0.8,marginHorizontal:2,paddingLeft: 30,justifyContent:'space-evenly',paddingBottom:16},
-  arithmeticColumn:{flex:1.2,justifyContent:'space-evenly',paddingRight:35,paddingBottom:5},
+  scientificColumn:{flex:0.8,marginHorizontal:2,justifyContent:'space-evenly',paddingBottom:16},
+  arithmeticColumn:{flex:1.2,justifyContent:'space-evenly',paddingBottom:5},
   controlColumn:{flex:1,justifyContent:'space-between',alignItems:'center',paddingVertical:6,paddingBottom:16,paddingRight:5},
   row:{flexDirection:'row',justifyContent:'space-between',marginBottom:4,paddingBottom:1,paddingRight:5},
   key:{flex:1,marginVertical:3,marginHorizontal:2,paddingVertical:5,backgroundColor:'transparent',alignItems:'center',justifyContent:'center'},
   numericKeyLabel:{fontSize:19,color:'#fff',fontWeight:'600',textAlign:'center'},
   arithmeticKeyLabel:{fontSize:26,color:'#ffeb3b',fontWeight:'600',textAlign:'center'},
   scientificKeyLabel:{fontSize:15,color:'#80d8ff',fontWeight:'500',textAlign:'center'},
-  clearKey:{backgroundColor:'#b71c1c',borderRadius:10},
+  clearKey:{backgroundColor:'#b71c1c',borderRadius:6},
   clearKeyLabel:{fontSize:13,color:'#fff',fontWeight:'500',textAlign:'center'},
   label:{fontSize:30,color:'#fff',fontWeight:'600',textAlign:'center'},
   equalsButton:{backgroundColor:'#00c853',borderRadius:10,justifyContent:'center',alignItems:'center',width:35,height:'45%',alignSelf:'center'},
   transparentIcon:{padding:6,alignItems:'center',justifyContent:'center'},
   verticalDivider:{width:1,height:'90%',backgroundColor:'#555',marginHorizontal:4,paddingBottom:5,paddingTop:5,borderRadius:4},
-  // Modal styles
+  iconButton: {
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    borderRadius: 24,
+    padding: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.6)',
@@ -696,7 +645,6 @@ const styles = StyleSheet.create({
   },
 });
 
-// --- History panel styles ---
 const historyStyles = StyleSheet.create({
   historyPanel: {
     position: 'absolute',
@@ -709,8 +657,6 @@ const historyStyles = StyleSheet.create({
     borderBottomRightRadius: 20,
     overflow: 'hidden',
     elevation: 8,
-    paddingLeft: 35,
-    paddingRight: 35,
     shadowColor: '#0008',
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.13,
@@ -720,7 +666,6 @@ const historyStyles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 18) : 18,
-    paddingLeft: 25,
     paddingBottom: 10,
     paddingHorizontal: 16,
     backgroundColor: '#f5f7fa',
@@ -729,9 +674,20 @@ const historyStyles = StyleSheet.create({
     zIndex: 9,
   },
   headerIcon: { padding: 7, borderRadius: 17 },
+  searchInput: {
+    flex: 1,
+    height: 40,
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 20,
+    paddingHorizontal: 16,
+    marginHorizontal: 10,
+    backgroundColor: '#fff',
+    fontSize: 16,
+    color: '#333',
+  },
   headerTitle: {
     flex: 1,
-    paddingLeft: 25,    
     fontSize: 24,
     fontWeight: '800',
     color: '#1a237e',
@@ -742,7 +698,6 @@ const historyStyles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     marginLeft: 'auto',
-    paddingLeft: 25,
     position: 'relative',
   },
   menuDropdown: {
@@ -753,7 +708,6 @@ const historyStyles = StyleSheet.create({
     borderRadius:10,
     shadowColor:'#000',
     shadowOffset:{width:0,height:2},
-    paddingLeft: 25,
     shadowOpacity:0.15,
     shadowRadius:8,
     paddingVertical:6,
@@ -824,7 +778,6 @@ const historyStyles = StyleSheet.create({
     backgroundColor: '#fff',
     minHeight: 68,
     paddingVertical: 10,
-    paddingLeft: 25,
     paddingHorizontal: 16,
     marginHorizontal: 2,
     elevation: 3,
@@ -839,12 +792,11 @@ const historyStyles = StyleSheet.create({
     marginRight: 15, borderWidth: 2, borderColor: '#eee',
   },
   avatarText: { fontSize: 22, fontWeight: '800', color: '#444' },
-  cardContent: { flex: 1, minWidth: 0,paddingleft: 25, flexDirection: 'column', justifyContent: 'center' },
+  cardContent: { flex: 1, minWidth: 0, flexDirection: 'column', justifyContent: 'center' },
   titleText: { fontSize: 18, fontWeight: 'bold', color: '#212121', marginBottom: 2, flex: 1 },
   resultText: { fontSize: 16, color: '#00796b', fontWeight: '600', marginBottom: 2 },
   timestamp: { fontSize: 12, color: '#757575', alignSelf: 'flex-end', marginTop: 2 },
-  pinIcon: { marginLeft: 7,paddingleft: 25, marginTop: 2 },
+  pinIcon: { marginLeft: 7, marginTop: 2 },
 });
 
-// Export main calculator component
 export default ProfessionalCalculator;

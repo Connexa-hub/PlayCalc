@@ -210,12 +210,14 @@ const CurrencySelectionScreen: React.FC = () => {
 const styles = StyleSheet.create({
   safeContainer: {
     flex: 1,
+    paddingTop:20,
     backgroundColor: '#121212',
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     padding: 16,
+    paddingTop:30,
     alignItems: 'center',
   },
   title: {
