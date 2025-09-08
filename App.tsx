@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { StatusBar } from 'react-native';
 import { Provider as PaperProvider } from 'react-native-paper';
 import { NavigationContainer } from '@react-navigation/native';
@@ -6,13 +6,17 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import * as SplashScreen from 'expo-splash-screen';
 
 import Calculator from './src/screens/Calculator';
 import ProfessionalCalculator from './src/screens/ProfessionalCalculator';
 import MainConverterScreen from './src/screens/MainConverterScreen';
 import CurrencySelectionScreen from './src/screens/CurrencySelectionScreen';
 import CurrencySearchScreen from './src/screens/CurrencySearchScreen';
+import CustomSplash from './src/screens/CustomSplash';
 import { CurrencyProvider } from './src/context/CurrencyContext';
+
+SplashScreen.preventAutoHideAsync(); // ⛔️ Don't auto-hide native splash
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
@@ -48,10 +52,7 @@ function TabNavigator() {
         },
       })}
     >
-      {/* ✅ Tab bar visible on Calculator */}
       <Tab.Screen name="Calculator" component={Calculator} />
-
-      {/* ✅ Tab bar hidden on Converter stack */}
       <Tab.Screen
         name="Converter"
         component={ConverterStack}
@@ -67,8 +68,6 @@ function MainStack() {
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       <Stack.Screen name="Tabs" component={TabNavigator} />
-
-      {/* ✅ Tab bar hidden on Professional Calculator */}
       <Stack.Screen
         name="ProfessionalCalculator"
         component={ProfessionalCalculator}
@@ -81,14 +80,36 @@ function MainStack() {
 }
 
 export default function App() {
+  const [ready, setReady] = useState(false);
+
+useEffect(() => {
+  const prepareApp = async () => {
+    try {
+      // Load fonts, data, etc.
+      await new Promise(resolve => setTimeout(resolve, 4000));
+    } catch (e) {
+      console.warn('App loading error:', e);
+    } finally {
+      await SplashScreen.hideAsync();
+      setReady(true); // triggers splash fade-out
+    }
+  };
+
+  prepareApp();
+}, []);
+
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <CurrencyProvider>
         <PaperProvider>
           <StatusBar barStyle="light-content" backgroundColor="#121212" />
-          <NavigationContainer>
-            <MainStack />
-          </NavigationContainer>
+          {ready ? (
+            <NavigationContainer>
+              <MainStack />
+            </NavigationContainer>
+          ) : (
+            <CustomSplash onFinish={() => setReady(true)} />
+          )}
         </PaperProvider>
       </CurrencyProvider>
     </GestureHandlerRootView>

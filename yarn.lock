@@ -1028,7 +1028,7 @@
     base64-js "^1.2.3"
     xmlbuilder "^15.1.1"
 
-"@expo/prebuild-config@^9.0.11":
+"@expo/prebuild-config@^9.0.10", "@expo/prebuild-config@^9.0.11":
   version "9.0.11"
   resolved "https://registry.npmjs.org/@expo/prebuild-config/-/prebuild-config-9.0.11.tgz"
   integrity sha512-0DsxhhixRbCCvmYskBTq8czsU0YOBsntYURhWPNpkl0IPVpeP9haE5W4OwtHGzXEbmHdzaoDwNmVcWjS/mqbDw==
@@ -1066,7 +1066,7 @@
   resolved "https://registry.npmjs.org/@expo/sudo-prompt/-/sudo-prompt-9.3.2.tgz"
   integrity sha512-HHQigo3rQWKMDzYDLkubN5WQOYXJJE2eNqIQC2axC2iO3mHdwnIR7FgZVvHWtBwAdzBgAP0ECp8KqS8TiMKvgw==
 
-"@expo/vector-icons@^14.0.0":
+"@expo/vector-icons@^14.0.0", "@expo/vector-icons@^14.1.0":
   version "14.1.0"
   resolved "https://registry.npmjs.org/@expo/vector-icons/-/vector-icons-14.1.0.tgz"
   integrity sha512-7T09UE9h8QDTsUeMGymB4i+iqvtEeaO5VvUjryFB4tugDTG/bkzViWA74hm5pfjjDEhYMXWaX112mcvhccmIwQ==
@@ -2714,13 +2714,20 @@ expo-navigation-bar@~4.2.8:
 
 expo-screen-orientation@~8.1.7:
   version "8.1.7"
-  resolved "https://registry.npmjs.org/expo-screen-orientation/-/expo-screen-orientation-8.1.7.tgz"
+  resolved "https://registry.yarnpkg.com/expo-screen-orientation/-/expo-screen-orientation-8.1.7.tgz#3751b441f2bfcbde798b1508c0ff9f099f4be911"
   integrity sha512-nYwadYtdU6mMDk0MCHMPPPQtBoeFYJ2FspLRW+J35CMLqzE4nbpwGeiImfXzkvD94fpOCfI4KgLj5vGauC3pfA==
 
 expo-sharing@~13.1.5:
   version "13.1.5"
   resolved "https://registry.yarnpkg.com/expo-sharing/-/expo-sharing-13.1.5.tgz#73d86cdcc037b46ddc82be224dfd3d6bceec497c"
   integrity sha512-X/5sAEiWXL2kdoGE3NO5KmbfcmaCWuWVZXHu8OQef7Yig4ZgHFkGD11HKJ5KqDrDg+SRZe4ISd6MxE7vGUgm4w==
+
+expo-splash-screen@~0.30.10:
+  version "0.30.10"
+  resolved "https://registry.yarnpkg.com/expo-splash-screen/-/expo-splash-screen-0.30.10.tgz#d249d350f867b6513fa34a9c4cf6545260ab5208"
+  integrity sha512-Tt9va/sLENQDQYeOQ6cdLdGvTZ644KR3YG9aRlnpcs2/beYjOX1LHT510EGzVN9ljUTg+1ebEo5GGt2arYtPjw==
+  dependencies:
+    "@expo/prebuild-config" "^9.0.10"
 
 expo-status-bar@~2.2.3:
   version "2.2.3"
@@ -3466,6 +3473,11 @@ loose-envify@^1.0.0, loose-envify@^1.4.0:
   dependencies:
     js-tokens "^3.0.0 || ^4.0.0"
 
+lottie-react-native@7.2.2:
+  version "7.2.2"
+  resolved "https://registry.yarnpkg.com/lottie-react-native/-/lottie-react-native-7.2.2.tgz#f328526dba9a36ba8c908aed9d3f68a8d3e0ec41"
+  integrity sha512-pp3dnFVFZlfZzIL5qKGXju2d6RfnYhPbb8xQL9dYqvPbPy2EbnK2aFlv6jAZLYh0QjUGPEmRAgAAnsOOtT+H9Q==
+
 lru-cache@^10.0.1, lru-cache@^10.2.0:
   version "10.4.3"
   resolved "https://registry.npmjs.org/lru-cache/-/lru-cache-10.4.3.tgz"
@@ -3495,10 +3507,10 @@ math-intrinsics@^1.1.0:
   resolved "https://registry.npmjs.org/math-intrinsics/-/math-intrinsics-1.1.0.tgz"
   integrity sha512-/IXtbwEk5HTPyEwyKX6hGkYXxM9nbj64B+ilVJnC/R6B0pH5G4V3b0pVbL7DBj4tkhBAppbQUlf6F6Xl9LHu1g==
 
-mathjs@^14.6.0:
-  version "14.6.0"
-  resolved "https://registry.npmjs.org/mathjs/-/mathjs-14.6.0.tgz"
-  integrity sha512-5vI2BLB5GKQmiSK9BH6hVkZ+GgqpdnOgEfmHl7mqVmdQObLynr63KueyYYLCQMzj66q69mV2XZZGQqqxeftQbA==
+mathjs@^14.7.0:
+  version "14.7.0"
+  resolved "https://registry.yarnpkg.com/mathjs/-/mathjs-14.7.0.tgz#cca88e3dbc2ac83487ead9e3d83170f031155e5f"
+  integrity sha512-RaMhb+9MSESjDZNox/FzzuFpIUI+oxGLyOy1t3BMoW53pGWnTzZtlucJ5cvbit0dIMYlCq00gNbW1giZX4/1Rg==
   dependencies:
     "@babel/runtime" "^7.26.10"
     complex.js "^2.2.5"
