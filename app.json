@@ -8,7 +8,7 @@
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "splash": {
-      "image": "../../assets/PlayCalc.png",
+      "image": "./assets/PlayCalc.png",
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
@@ -18,13 +18,13 @@
     "android": {
       "package": "com.connexa.playcalc",
       "adaptiveIcon": {
-        "foregroundImage": "../../assets/PlayCalc.png",
+        "foregroundImage": "./assets/PlayCalc.png",
         "backgroundColor": "#000000"
       },
       "edgeToEdgeEnabled": true
     },
     "web": {
-      "favicon": "../../assets/PlayCalc.png"
+      "favicon": "./assets/PlayCalc.png"
     },
     "plugins": [],
     "extra": {
