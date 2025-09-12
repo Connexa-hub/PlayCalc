@@ -1,15 +1,17 @@
 {
   "cli": {
-    "version": ">= 3.21.0"
+    "appVersionSource": "remote"
   },
   "build": {
     "preview": {
+      "developmentClient": true,
       "distribution": "internal",
       "android": {
         "image": "ubuntu-22.04-jdk-17-ndk-r26b"
       }
     },
     "production": {
+      "distribution": "store",
       "android": {
         "image": "ubuntu-22.04-jdk-17-ndk-r26b"
       }
