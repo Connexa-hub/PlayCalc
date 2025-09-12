@@ -30,7 +30,6 @@ export default ({ config }) => ({
       favicon: "./assets/favicon.png",
     },
     plugins: [
-      "expo-font",
       [
         "expo-ads-admob",
         {
