@@ -19,8 +19,11 @@ jobs:
           distribution: temurin
           java-version: 17
 
+      - name: Install dependencies (Yarn)
+        run: yarn install --frozen-lockfile
+
       - name: Install EAS CLI
-        run: npm install -g eas-cli
+        run: yarn global add eas-cli
 
       - name: Build APK with EAS (Preview)
         env:
