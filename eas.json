@@ -1,0 +1,22 @@
+{
+  "cli": {
+    "version": ">= 3.21.0"
+  },
+  "build": {
+    "preview": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "android": {
+        "image": "ubuntu-22.04-jdk-17-ndk-r27c"
+      }
+    },
+    "production": {
+      "android": {
+        "image": "ubuntu-22.04-jdk-17-ndk-r27c"
+      }
+    }
+  },
+  "submit": {
+    "production": {}
+  }
+}
