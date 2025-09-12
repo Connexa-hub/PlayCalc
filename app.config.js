@@ -29,16 +29,7 @@ export default ({ config }) => ({
     web: {
       favicon: "./assets/favicon.png",
     },
-    plugins: [
-      [
-        "expo-ads-admob",
-        {
-          userTrackingPermission: "Allow ads to be shown relevant to you.",
-          androidAdMobAppId: "ca-app-pub-3940256099942544~3347511713", // TEST APP ID, replace for production
-          iosAdMobAppId: "ca-app-pub-3940256099942544~1458002511" // TEST APP ID, replace for production
-        }
-      ]
-    ],
+    plugins: [],
     extra: {
       API_KEY: process.env.API_KEY,
       eas: {
