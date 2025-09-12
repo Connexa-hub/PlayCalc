@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback, useRef } from 'react';
+import React, { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -8,6 +8,7 @@ import {
   StatusBar,
   SafeAreaView,
   Animated,
+  RefreshControl,
 } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -19,6 +20,8 @@ import {
 import { FlashList } from '@shopify/flash-list';
 import { useCurrencyMap } from '../hooks/useCurrencyMap';
 import { useCurrencyTargets } from '../context/CurrencyContext';
+import CurrencyLoader from '../components/CurrencyLoader';
+import CurrencyFlag from '../components/CurrencyFlag';
 
 type CurrencyItem = {
   type: 'header' | 'item';
@@ -32,17 +35,23 @@ const CurrencySelectionScreen: React.FC = () => {
   const navigation = useNavigation();
   const route = useRoute();
   const { targets, setTargets } = useCurrencyTargets();
-  const { index } = route.params;
-  const currencyMap = useCurrencyMap();
+  const { index } = (route.params || {}) as any;
+  const { currencyMap, loading: currencyLoading, refetch: refreshCurrencyMap } = useCurrencyMap();
   const [recent, setRecent] = useState<string[]>([]);
   const [activeLetter, setActiveLetter] = useState<string | null>(null);
   const [overlayLetter, setOverlayLetter] = useState<string | null>(null);
   const overlayAnim = useRef(new Animated.Value(0)).current;
   const listRef = useRef<FlashList<CurrencyItem>>(null);
+  const mountFade = useRef(new Animated.Value(0)).current;
+  const [refreshing, setRefreshing] = useState(false);
+
+  useEffect(() => {
+    Animated.timing(mountFade, { toValue: 1, duration: 220, useNativeDriver: true }).start();
+  }, [mountFade]);
 
   const grouped = useMemo(() => {
     const acc: { [key: string]: CurrencyItem[] } = {};
-    Object.keys(currencyMap).forEach((code) => {
+    Object.keys(currencyMap || {}).forEach((code) => {
       const letter = code[0].toUpperCase();
       if (!acc[letter]) acc[letter] = [];
       acc[letter].push({
@@ -106,77 +115,82 @@ const CurrencySelectionScreen: React.FC = () => {
     if (item.type === 'header') {
       return <Text style={styles.section}>{item.title}</Text>;
     }
+    const flag = item.flag || currencyMap[item.code!] && currencyMap[item.code!].flag || '💱';
+    const name = item.name || currencyMap[item.code!]?.name || 'Unknown Currency';
 
     return (
       <TouchableOpacity style={styles.item} onPress={() => handleSelect(item.code!)}>
-        <Text style={styles.flag}>{item.flag || '❓'}</Text>
+        <CurrencyFlag flag={flag} />
         <Text style={styles.code}>{item.code}</Text>
-        <Text style={styles.name}>{item.name || 'Unknown Currency'}</Text>
+        <Text style={styles.name}>{name}</Text>
       </TouchableOpacity>
     );
-  }, [handleSelect]);
+  }, [handleSelect, currencyMap]);
 
   const scrollToLetter = useCallback((letter: string) => {
-    const index = flatData.findIndex(
-      (item) => item.type === 'header' && item.title === letter
-    );
-    if (index !== -1) {
+    const idx = flatData.findIndex((item) => item.type === 'header' && item.title === letter);
+    if (idx !== -1) {
       setActiveLetter(letter);
-      listRef.current?.scrollToIndex({ index, animated: true });
+      listRef.current?.scrollToIndex({ index: idx, animated: true });
     }
   }, [flatData]);
 
   const handleLongPress = (letter: string) => {
     setOverlayLetter(letter);
-    Animated.timing(overlayAnim, {
-      toValue: 1,
-      duration: 200,
-      useNativeDriver: true,
-    }).start();
+    Animated.timing(overlayAnim, { toValue: 1, duration: 200, useNativeDriver: true }).start();
     scrollToLetter(letter);
   };
 
   const handleRelease = () => {
-    Animated.timing(overlayAnim, {
-      toValue: 0,
-      duration: 300,
-      useNativeDriver: true,
-    }).start(() => setOverlayLetter(null));
+    Animated.timing(overlayAnim, { toValue: 0, duration: 300, useNativeDriver: true }).start(() => setOverlayLetter(null));
   };
 
-  const onViewableItemsChanged = useCallback(({ viewableItems }) => {
-    const firstHeader = viewableItems.find((v) => v.item.type === 'header');
+  const onViewableItemsChanged = useCallback(({ viewableItems }: any) => {
+    const firstHeader = viewableItems.find((v: any) => v.item.type === 'header');
     if (firstHeader?.item?.title && firstHeader.item.title !== activeLetter) {
       setActiveLetter(firstHeader.item.title);
     }
   }, [activeLetter]);
 
+  const onRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await refreshCurrencyMap(true); // force API
+    } catch (e) {}
+    setRefreshing(false);
+  };
+
+  // Show loader ONLY on first load, not on pull-to-refresh
+  if ((currencyLoading && !refreshing) || (!currencyMap || Object.keys(currencyMap).length === 0)) {
+    return <CurrencyLoader />;
+  }
+
   return (
     <SafeAreaView style={styles.safeContainer}>
       <StatusBar barStyle="light-content" backgroundColor="#121212" />
-      <GestureHandlerRootView style={{ flex: 1 }}>
-        <View style={styles.header}>
-          <Text style={styles.title}>Change Currency</Text>
-          <TouchableOpacity onPress={() => navigation.navigate('CurrencySearch', { index })}>
-            <MaterialCommunityIcons name="magnify" size={24} color="#00e676" />
-          </TouchableOpacity>
-        </View>
+      <Animated.View style={{ flex: 1, opacity: mountFade }}>
+        <GestureHandlerRootView style={{ flex: 1 }}>
+          <View style={styles.header}>
+            <Text style={styles.title}>Change Currency</Text>
+            <TouchableOpacity onPress={() => navigation.navigate('CurrencySearch', { index })}>
+              <MaterialCommunityIcons name="magnify" size={24} color="#00e676" />
+            </TouchableOpacity>
+          </View>
 
-        <FlashList
-          ref={listRef}
-          data={flatData}
-          renderItem={renderItem}
-          estimatedItemSize={60}
-          keyExtractor={(item, i) => item.code ?? `header-${item.title}-${i}`}
-          onScrollBeginDrag={() => setActiveLetter(null)}
-          onViewableItemsChanged={onViewableItemsChanged}
-          viewabilityConfig={{ itemVisiblePercentThreshold: 50 }}
-        />
+          <FlashList
+            ref={listRef}
+            data={flatData}
+            renderItem={renderItem}
+            estimatedItemSize={60}
+            keyExtractor={(item, i) => item.code ?? `header-${item.title}-${i}`}
+            onScrollBeginDrag={() => setActiveLetter(null)}
+            onViewableItemsChanged={onViewableItemsChanged}
+            viewabilityConfig={{ itemVisiblePercentThreshold: 50 }}
+            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+          />
 
-        <View style={styles.index}>
-          {Object.keys(grouped)
-            .sort()
-            .map((letter) => (
+          <View style={styles.index}>
+            {Object.keys(grouped).sort().map((letter) => (
               <LongPressGestureHandler
                 key={letter}
                 onHandlerStateChange={({ nativeEvent }) => {
@@ -185,39 +199,36 @@ const CurrencySelectionScreen: React.FC = () => {
                 }}
               >
                 <TouchableOpacity onPress={() => scrollToLetter(letter)}>
-                  <Text
-                    style={[
-                      styles.indexLetter,
-                      activeLetter === letter && styles.activeLetter,
-                    ]}
-                  >
+                  <Text style={[styles.indexLetter, activeLetter === letter && styles.activeLetter]}>
                     {letter}
                   </Text>
                 </TouchableOpacity>
               </LongPressGestureHandler>
             ))}
-        </View>
+          </View>
 
-        {overlayLetter && (
-          <Animated.View style={[styles.overlay, { opacity: overlayAnim }]}>
-            <Text style={styles.overlayText}>{overlayLetter}</Text>
-          </Animated.View>
-        )}
-      </GestureHandlerRootView>
+          {overlayLetter && (
+            <Animated.View style={[styles.overlay, { opacity: overlayAnim }]}>
+              <Text style={styles.overlayText}>{overlayLetter}</Text>
+            </Animated.View>
+          )}
+        </GestureHandlerRootView>
+      </Animated.View>
     </SafeAreaView>
   );
 };
+
 const styles = StyleSheet.create({
   safeContainer: {
     flex: 1,
-    paddingTop:20,
+    paddingTop: 20,
     backgroundColor: '#121212',
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     padding: 16,
-    paddingTop:30,
+    paddingTop: 30,
     alignItems: 'center',
   },
   title: {
@@ -233,10 +244,6 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#333',
     backgroundColor: '#1e1e1e',
-  },
-  flag: {
-    fontSize: 24,
-    marginRight: 12,
   },
   code: {
     fontSize: 18,
@@ -292,4 +299,5 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
 });
+
 export default CurrencySelectionScreen;

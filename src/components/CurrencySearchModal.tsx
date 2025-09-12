@@ -1,31 +1,105 @@
 import React, { useState } from 'react';
-import { View, TextInput, FlatList, TouchableOpacity, Text, StyleSheet, Modal } from 'react-native';
+import { Modal, View, Text, TextInput, TouchableOpacity, FlatList, StyleSheet } from 'react-native';
+import CurrencyLoader from './CurrencyLoader';
+import CurrencyFlag from './CurrencyFlag';
 
-export default function CurrencySearchModal({ visible, onSelect, onClose, currencies }) {
-  const [query, setQuery] = useState('');
-  const filtered = Object.entries(currencies)
-    .filter(([code, obj]) => code.toLowerCase().includes(query.toLowerCase()) || (obj.name || '').toLowerCase().includes(query.toLowerCase()));
+const CurrencySearchModal = ({ visible, onSelect, onClose, currencies }) => {
+  const [search, setSearch] = useState('');
+
+  const filtered = Object.keys(currencies || {})
+    .filter(code =>
+      code.toLowerCase().includes(search.toLowerCase()) ||
+      currencies[code].name.toLowerCase().includes(search.toLowerCase())
+    );
+
+  if (!currencies || Object.keys(currencies).length === 0) return <CurrencyLoader />;
+
   return (
     <Modal visible={visible} transparent animationType="slide">
-      <View style={styles.modal}>
-        <TextInput style={styles.input} placeholder="Search currency..." value={query} onChangeText={setQuery} />
-        <FlatList
-          data={filtered}
-          keyExtractor={([code]) => code}
-          renderItem={({ item: [code, obj] }) => (
-            <TouchableOpacity onPress={() => { onSelect(code); setQuery(''); }}>
-              <Text style={styles.item}>{obj.flag || '💱'} {code} - {obj.name}</Text>
-            </TouchableOpacity>
-          )}
-        />
-        <TouchableOpacity style={styles.closeBtn} onPress={onClose}><Text style={{color: "#191919"}}>Close</Text></TouchableOpacity>
+      <View style={styles.modalBg}>
+        <View style={styles.modalContent}>
+          <TextInput
+            style={styles.input}
+            placeholder="Search currency..."
+            placeholderTextColor="#aaa"
+            value={search}
+            onChangeText={setSearch}
+            autoFocus
+          />
+          <FlatList
+            data={filtered}
+            keyExtractor={code => code}
+            renderItem={({ item: code }) => (
+              <TouchableOpacity style={styles.item} onPress={() => { onSelect(code); setSearch(''); }}>
+                <CurrencyFlag flag={currencies[code]?.flag} size={22} />
+                <Text style={styles.code}>{code}</Text>
+                <Text style={styles.name}>{currencies[code]?.name || ''}</Text>
+              </TouchableOpacity>
+            )}
+            keyboardShouldPersistTaps="handled"
+          />
+          <TouchableOpacity style={styles.close} onPress={onClose}>
+            <Text style={styles.closeText}>Close</Text>
+          </TouchableOpacity>
+        </View>
       </View>
     </Modal>
   );
-}
+};
+
 const styles = StyleSheet.create({
-  modal: { flex: 1, backgroundColor: '#232323ee', padding: 16, justifyContent: "center" },
-  input: { backgroundColor: '#fff', color: '#191919', marginBottom: 8, borderRadius: 8, padding: 8 },
-  item: { color: '#00e676', padding: 10, borderBottomWidth: 1, borderBottomColor: '#444', fontSize: 18 },
-  closeBtn: { marginTop: 12, alignSelf: 'center', backgroundColor: '#00e676', padding: 8, borderRadius: 8 }
+  modalBg: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    width: '92%',
+    backgroundColor: '#232323',
+    borderRadius: 16,
+    padding: 16,
+    maxHeight: '85%',
+  },
+  input: {
+    backgroundColor: '#333',
+    color: '#fff',
+    borderRadius: 8,
+    padding: 10,
+    fontSize: 16,
+    marginBottom: 12,
+  },
+  item: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    borderBottomColor: '#444',
+    borderBottomWidth: 1,
+  },
+  code: {
+    fontSize: 16,
+    color: '#fff',
+    fontWeight: '600',
+    marginRight: 10,
+  },
+  name: {
+    fontSize: 15,
+    color: '#aaa',
+    flex: 1,
+    flexWrap: 'wrap',
+  },
+  close: {
+    backgroundColor: '#00e676',
+    borderRadius: 8,
+    marginTop: 12,
+    alignItems: 'center',
+    padding: 10,
+  },
+  closeText: {
+    fontWeight: 'bold',
+    color: '#121212',
+    fontSize: 16,
+  },
 });
+
+export default CurrencySearchModal;

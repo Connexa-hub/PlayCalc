@@ -27,6 +27,8 @@ import * as ScreenOrientation from 'expo-screen-orientation';
 import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import { PanResponder } from 'react-native';
+import BannerAd from '../components/BannerAd';
+import { showInterstitial } from '../components/InterstitialAd';
 
 const math = create(all);
 const { height: SCREEN_HEIGHT, width: SCREEN_WIDTH } = Dimensions.get('screen');
@@ -252,6 +254,7 @@ const Calculator: React.FC = () => {
   const [tempName, setTempName] = useState<string>('');
   const [menuVisible, setMenuVisible] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>('');
+  const [evalCount, setEvalCount] = useState(0);
 
   const MAX_FONT = 48;
   const MIN_FONT = 16;
@@ -267,42 +270,36 @@ const Calculator: React.FC = () => {
   const lastTap = useRef<number | null>(null);
   const inputRef = useRef<TextInput>(null);
 
-useEffect(() => {
-  // === Hook Setup ===
-  const setup = async () => {
-    try {
-      // Lock orientation to portrait when the component mounts
-      await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP);
-      await NavigationBar.setVisibilityAsync('hidden');
-      await NavigationBar.setBehaviorAsync('overlay-swipe');
-      navigation.setOptions({ tabBarStyle: { display: 'none' } });
-      await loadHistory();
-      await loadCurrent();
-    } catch (error) {
-      console.error('Setup error:', error);
-    }
-  };
+  useEffect(() => {
+    const setup = async () => {
+      try {
+        await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP);
+        await NavigationBar.setVisibilityAsync('hidden');
+        await NavigationBar.setBehaviorAsync('overlay-swipe');
+        navigation.setOptions({ tabBarStyle: { display: 'none' } });
+        await loadHistory();
+        await loadCurrent();
+      } catch (error) {
+        console.error('Setup error:', error);
+      }
+    };
 
-  setup();
+    setup();
 
-  // Navigation focus listener to ensure portrait mode on screen focus
-  const unsubscribe = navigation.addListener('focus', async () => {
-    try {
-      await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP);
-    } catch (error) {
-      console.error('Error locking orientation on focus:', error);
-    }
-  });
+    const unsubscribe = navigation.addListener('focus', async () => {
+      try {
+        await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP);
+      } catch (error) {
+        console.error('Error locking orientation on focus:', error);
+      }
+    });
 
-  // === Hook Cleanup (return) ===
-  return () => {
-    // Reset to portrait when unmounting
-    ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP)
-      .catch(error => console.error('Error resetting orientation on unmount:', error));
-    // Remove navigation listener
-    unsubscribe();
-  };
-}, [navigation]);
+    return () => {
+      ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP)
+        .catch(error => console.error('Error resetting orientation on unmount:', error));
+      unsubscribe();
+    };
+  }, [navigation]);
 
   useEffect(() => {
     const subscription = AppState.addEventListener('change', nextAppState => {
@@ -442,6 +439,7 @@ useEffect(() => {
     }
   };
 
+  // Show interstitial after every 10th evaluation
   const handleEquals = () => {
     try {
       const expression = input.replace(/×/g, '*').replace(/÷/g, '/');
@@ -449,6 +447,15 @@ useEffect(() => {
       const resultStr = evalResult.toString();
       setResult(resultStr);
       saveToHistory(input, resultStr);
+
+      setEvalCount(prev => {
+        const next = prev + 1;
+        if (next >= 10) {
+          showInterstitial();
+          return 0;
+        }
+        return next;
+      });
     } catch {
       setResult('Error');
     }
@@ -496,38 +503,39 @@ useEffect(() => {
       useNativeDriver: false,
     }).start();
   };
-const closePanel = () => {
-  setPanelOpen(false);
-  Animated.spring(panelAnim, {
-    toValue: 0,
-    bounciness: 8, // Adds a slight bounce for natural feel
-    speed: 12, // Controls animation speed (higher is faster)
-    useNativeDriver: false,
-  }).start();
-};
+  const closePanel = () => {
+    setPanelOpen(false);
+    Animated.spring(panelAnim, {
+      toValue: 0,
+      bounciness: 8,
+      speed: 12,
+      useNativeDriver: false,
+    }).start();
+  };
 
-const panelPanResponder = useRef(
-  PanResponder.create({
-    onStartShouldSetPanResponder: () => true,
-    onPanResponderGrant: () => {
-      initialPanelValue.current = panelAnim._value;
-    },
-    onPanResponderMove: (_, g) => {
-      const newVal = initialPanelValue.current + g.dy;
-      panelAnim.setValue(Math.max(0, Math.min(SCREEN_HEIGHT, newVal)));
-    },
-    onPanResponderRelease: (_, g) => {
-      const threshold = SCREEN_HEIGHT * 0.3;
-      if (g.dy < -10 || g.vy < -0.1) { // Close on slight upward swipe or fast upward velocity
-        closePanel();
-      } else if (panelAnim._value > threshold || g.vy > 0.2) {
-        openPanel();
-      } else {
-        closePanel();
-      }
-    },
-  })
-).current;
+  const panelPanResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onPanResponderGrant: () => {
+        initialPanelValue.current = panelAnim._value;
+      },
+      onPanResponderMove: (_, g) => {
+        const newVal = initialPanelValue.current + g.dy;
+        panelAnim.setValue(Math.max(0, Math.min(SCREEN_HEIGHT, newVal)));
+      },
+      onPanResponderRelease: (_, g) => {
+        const threshold = SCREEN_HEIGHT * 0.3;
+        if (g.dy < -10 || g.vy < -0.1) {
+          closePanel();
+        } else if (panelAnim._value > threshold || g.vy > 0.2) {
+          openPanel();
+        } else {
+          closePanel();
+        }
+      },
+    })
+  ).current;
+
   const shareHistory = async () => {
     try {
       const shareText = history
@@ -659,7 +667,17 @@ const panelPanResponder = useRef(
         </Animated.View>
       </Animated.View>
 
-      <View style={[styles.container, { paddingBottom: tabVisible ? TAB_HEIGHT : 16 }]}>
+      <View
+        style={[
+          styles.container,
+          {
+            // ADJUST PADDING: This ensures the small banner never covers buttons or tab
+            // If you ever change banner height, increase/decrease this value
+            paddingBottom: tabVisible ? TAB_HEIGHT + 60 : 76, // 60px for banner, 50px for tab
+            // (Comment: This padding ensures the banner never overlaps buttons or tabs)
+          },
+        ]}
+      >
         <Pressable style={styles.display} onPress={handleDoubleTap}>
           <View style={styles.inputWrapper}>
             <TextInput
@@ -752,12 +770,16 @@ const panelPanResponder = useRef(
           </View>
         </View>
       </Modal>
+
+      {/* BANNER AD: Always at the bottom */}
+      <BannerAd style={{ position: 'absolute', left: 0, right: 0, bottom: 0, zIndex: 22 }} />
     </SafeAreaView>
   );
 };
 
 export default Calculator;
 
+// ...styles remain unchanged, as in your original file...
 // Styles remain unchanged
 const styles = StyleSheet.create({
   safeContainer: { flex: 1, backgroundColor: '#000' },

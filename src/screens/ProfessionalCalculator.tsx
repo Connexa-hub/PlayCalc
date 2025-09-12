@@ -16,7 +16,7 @@ import {
   AppState,
 } from 'react-native';
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { create, all } from 'mathjs';
+import { create, all, simplify, parse } from 'mathjs';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ScreenOrientation from 'expo-screen-orientation';
 import * as FileSystem from 'expo-file-system';
@@ -45,6 +45,18 @@ function getAvatarColor(str: string) {
   let hash = 0;
   for (let i = 0; i < str.length; i++) hash += str.charCodeAt(i);
   return AVATAR_COLORS[hash % AVATAR_COLORS.length];
+}
+
+function formatWithCommas(strOrNum: string | number) {
+  if (typeof strOrNum !== 'string') strOrNum = String(strOrNum);
+  // Only format decimal numbers, not expressions or symbols
+  // Only format the part outside math functions/expressions
+  // Split string by non-numeric (except . and -) and format each block
+  return strOrNum.replace(/-?\d+(\.\d+)?/g, (n) => {
+    const [int, dec] = n.split('.');
+    const formatted = int.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+    return dec !== undefined ? formatted + '.' + dec : formatted;
+  });
 }
 
 interface HistoryEntry {
@@ -256,7 +268,6 @@ const ProfessionalCalculator: React.FC = () => {
   useEffect(() => {
     const lockOrientation = async () => {
       try {
-        // Force landscape orientation
         await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.LANDSCAPE);
       } catch (error) {
         console.warn('Error locking orientation to landscape:', error);
@@ -271,7 +282,15 @@ const ProfessionalCalculator: React.FC = () => {
       });
       inputRef.current.focus();
     }
+    const unsubscribe = navigation.addListener('focus', async () => {
+      try {
+        await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.LANDSCAPE);
+      } catch (error) {
+        console.error('Error locking orientation on focus:', error);
+      }
+    });
     return () => {
+      unsubscribe();
       const unlockOrientation = async () => {
         try {
           await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP);
@@ -310,7 +329,7 @@ const ProfessionalCalculator: React.FC = () => {
     };
     const customLog = (x: number) => math.log10(x);
     const customLn = (x: number) => math.log(x);
-    const customSqrt = (x: number) => math.sqrt(x);
+    const customSqrt = (x: any) => math.sqrt(x);
     const customPow = (x: number, y: number) => math.pow(x, y);
     const customInv = (x: number) => 1 / x;
     const customPi = () => Math.PI;
@@ -399,58 +418,99 @@ const ProfessionalCalculator: React.FC = () => {
     }
   };
 
+  function handleScientificButton(val: string) {
+    switch (val) {
+      case 'sin':
+      case 'cos':
+      case 'tan':
+      case 'log':
+      case 'ln':
+      case '√': {
+        const mapped = val === '√' ? 'sqrt' : val;
+        if (justEvaluated) {
+          setInput(`${mapped}(`);
+          setResult('');
+          setJustEvaluated(false);
+        } else if (/[\dπ)]$/.test(input)) {
+          setInput((prev) => prev + `*${mapped}(`);
+        } else {
+          setInput((prev) => prev + `${mapped}(`);
+        }
+        break;
+      }
+      case 'π': {
+        if (justEvaluated) {
+          setInput('π');
+          setResult('');
+          setJustEvaluated(false);
+        } else if (/[\d)]$/.test(input)) {
+          setInput((prev) => prev + '*π');
+        } else {
+          setInput((prev) => prev + 'π');
+        }
+        break;
+      }
+      case 'x^y': {
+        if (justEvaluated) {
+          setInput(result + '^');
+          setResult('');
+          setJustEvaluated(false);
+        } else if (input) {
+          setInput((prev) => prev + '^');
+        } else {
+          setInput('^');
+        }
+        break;
+      }
+      case '1/x': {
+        let base = justEvaluated ? result : input || '0';
+        if (!base || base === '') base = '0';
+        setInput(`1/(${base})`);
+        setResult('');
+        setJustEvaluated(false);
+        break;
+      }
+      case '(': {
+        if (justEvaluated) {
+          setInput('(');
+          setResult('');
+          setJustEvaluated(false);
+        } else if (/[\dπ)]$/.test(input)) {
+          setInput((prev) => prev + '*(');
+        } else {
+          setInput((prev) => prev + '(');
+        }
+        break;
+      }
+      case ')': {
+        setInput((prev) => prev + ')');
+        break;
+      }
+      case 'C': {
+        if (input && result) saveToHistory(input, result || '—');
+        setInput('');
+        setResult('');
+        setJustEvaluated(false);
+        exprFadeAnim.setValue(1);
+        exprSlideAnim.setValue(0);
+        resultFadeAnim.setValue(0);
+        resultSlideAnim.setValue(40);
+        break;
+      }
+      default:
+        setInput((prev) => prev + val);
+    }
+  }
+
   const handleClick = (val: string) => {
-    if (val === 'C') {
-      if (input && result) saveToHistory(input, result || '—');
-      setInput('');
-      setResult('');
-      setJustEvaluated(false);
-      exprFadeAnim.setValue(1);
-      exprSlideAnim.setValue(0);
-      resultFadeAnim.setValue(0);
-      resultSlideAnim.setValue(40);
-    } else if (val === 'DEL') {
+    if (['sin', 'cos', 'tan', 'log', 'ln', '√', 'π', 'x^y', '1/x', '(', ')', 'C'].includes(val)) {
+      handleScientificButton(val);
+      return;
+    }
+    if (val === 'DEL') {
       setInput((prev) => prev.slice(0, -1));
     } else if (val === '=') {
       handleEquals();
-    } else if (val === 'x^y') {
-      if (justEvaluated) {
-        setInput(result + '^');
-        setResult('');
-        setJustEvaluated(false);
-      } else {
-        setInput((prev) => prev + '^');
-      }
-    } else if (val === '1/x') {
-      const base = justEvaluated ? result : input || '0';
-      setInput(`1/(${base})`);
-      setResult('');
-      setJustEvaluated(false);
-    } else if (['sin', 'cos', 'tan', 'log', 'ln', '√'].includes(val)) {
-      const mapped = val === '√' ? 'sqrt' : val;
-      if (justEvaluated) {
-        setInput(`${mapped} `);
-        setResult('');
-        setJustEvaluated(false);
-      } else {
-        setInput((prev) => prev + `${mapped} `);
-      }
-    } else if (val === 'π') {
-      if (justEvaluated) {
-        setInput('π');
-        setResult('');
-        setJustEvaluated(false);
-      } else {
-        setInput((prev) => prev + 'π');
-      }
-    } else if (val === '(' || val === ')') {
-      if (justEvaluated) {
-        setInput(val);
-        setResult('');
-        setJustEvaluated(false);
-      } else {
-        setInput((prev) => prev + val);
-      }
     } else if (justEvaluated && (!isNaN(Number(val)) || val === '.')) {
       setInput(val);
       setResult('');
@@ -466,51 +526,107 @@ const ProfessionalCalculator: React.FC = () => {
     }
   };
 
+  // --- Fixed and expanded evaluation logic ---
   const handleEquals = () => {
-    if (!input || /^[\d.]+$/.test(input)) {
-      setResult('Error: Invalid Input');
+    if (!input || input.trim() === '') {
+      setResult('');
       return;
     }
 
-    // Preprocess input for evaluation
     let expr = input
       .replace(/×/g, '*')
       .replace(/÷/g, '/')
       .replace(/−/g, '-')
       .replace(/π/g, 'pi')
-      .replace(/√/g, 'sqrt')
-      .replace(/\^/g, '**');
+      .replace(/√/g, 'sqrt');
 
-    // Validate expression early
-    if (expr.length > 1000 || /(.{10,})\1{3,}/.test(expr)) {
-      setResult('Error: Expression Too Complex');
-      return;
-    }
+    expr = expr.replace(/\s+/g, ' ').trim();
 
-    // Handle implicit multiplication (e.g., 5cos5 → 5*cos(5), 2(3+4) → 2*(3+4))
-    expr = expr.replace(/(\d+|\))\s*(\(|\b(sin|cos|tan|log|ln|sqrt|pi)\b)/g, '$1*$2');
-    // Add parentheses for functions (e.g., cos 5 → cos(5))
-    expr = expr.replace(/(sin|cos|tan|log|ln|sqrt)\s*(\d+|\([^()]*\))/g, '$1($2)');
-    // Handle nested functions (e.g., costan6 → cos(tan(6)))
-    expr = expr.replace(/(sin|cos|tan|log|ln|sqrt)\s*(sin|cos|tan|log|ln|sqrt)\b/g, '$1($2)');
+    // Insert implicit multiplication between numbers, pi, ans, parentheses, and functions/variables
+    expr = expr.replace(/(\d+(?:\.\d+)?|\)|pi|ans)\s*(?=(\(|pi|ans|[a-zA-Z]))/g, '$1*');
+
+    // Fix cases like cos5 -> cos(5), sin2pi -> sin(2*pi), etc.
+    // Insert parentheses if function is followed by number/parenthesis/pi/ans
+    expr = expr.replace(/(sin|cos|tan|log|ln|sqrt)\s*(?=(\d|pi|ans|\())/g, '$1(');
+
+    // Add closing parentheses for open function calls at the end (e.g., cos(5 -> cos(5))
+    expr = expr.replace(/(sin|cos|tan|log|ln|sqrt)\(([^()]*)$/g, '$1($2)');
+
+    // Expand function calls: sin 30, etc.
+    const funcPattern = /(sin|cos|tan|log|ln|sqrt)\s*(-?\d+(?:\.\d+)?|ans|pi|\([^()]*\))/g;
+    let prevExpr;
+    do {
+      prevExpr = expr;
+      expr = expr.replace(funcPattern, (_, fn, arg) => `${fn}(${arg})`);
+    } while (expr !== prevExpr);
 
     // Auto-balance parentheses
     const openParens = (expr.match(/\(/g) || []).length;
     const closeParens = (expr.match(/\)/g) || []).length;
-    if (openParens > closeParens) {
-      expr += ')'.repeat(openParens - closeParens);
-    } else if (closeParens > openParens) {
+    if (closeParens > openParens) {
       setResult('Error: Unmatched Parentheses');
+      return;
+    } else if (openParens > closeParens) {
+      expr += ')'.repeat(openParens - closeParens);
+    }
+
+    if (expr.length > 2000 || /(.{12,})\1{3,}/.test(expr)) {
+      setResult('Error: Expression Too Complex');
       return;
     }
 
     try {
-      const res = math.evaluate(expr, scope);
-      if (!Number.isFinite(res)) {
-        setResult('Error: Math Error (Invalid Result)');
+      let node;
+      try {
+        node = parse(expr);
+      } catch (parseErr) {
+        setResult('Error: Syntax Error');
         return;
       }
-      const resStr = res.toFixed(6).replace(/\.?0+$/, '');
+
+      let expanded;
+      try {
+        expanded = simplify(node);
+      } catch {
+        expanded = node;
+      }
+
+      let res;
+      try {
+        res = expanded.evaluate(scope);
+      } catch (ee) {
+        try {
+          res = math.evaluate(expr, scope);
+        } catch (eee) {
+          throw eee;
+        }
+      }
+
+      let resStr: string;
+      if (typeof res === 'number') {
+        if (!Number.isFinite(res)) {
+          setResult('Error: Math Error (Invalid Result)');
+          return;
+        }
+        resStr = formatWithCommas(res.toFixed(12).replace(/\.?0+$/, ''));
+      } else if (res && typeof res === 'object' && res.isComplex) {
+        const re = res.re !== undefined ? Number(res.re).toFixed(8).replace(/\.?0+$/, '') : '0';
+        const im = res.im !== undefined ? Number(res.im).toFixed(8).replace(/\.?0+$/, '') : '0';
+        if (im === '0') resStr = formatWithCommas(re);
+        else if (re === '0') resStr = formatWithCommas(im) + 'i';
+        else resStr = `${formatWithCommas(re)} ${Number(im) >= 0 ? '+' : '-'} ${formatWithCommas(Math.abs(Number(im)))}i`;
+      } else if (res && typeof res === 'object' && res.entries && Array.isArray(res.entries)) {
+        resStr = math.format(res, { precision: 12 });
+      } else if (typeof res === 'boolean') {
+        resStr = res ? 'True' : 'False';
+      } else {
+        try {
+          resStr = math.format(res, { precision: 12 });
+        } catch {
+          resStr = String(res);
+        }
+      }
+
       setResult(resStr);
       scope.ans = res;
       setJustEvaluated(true);
@@ -529,11 +645,14 @@ const ProfessionalCalculator: React.FC = () => {
       ]).start();
     } catch (e: any) {
       console.error('Evaluation error:', e);
-      if (e.message.includes('SyntaxError') || e.message.includes('Unexpected')) {
+      const msg = (e && e.message) || '';
+      if (msg.includes('Parenthesis') || msg.includes('Unexpected') || msg.includes('Syntax')) {
         setResult('Error: Syntax Error');
-      } else if (e.message.includes('Domain') || e.message.includes('undefined')) {
+      } else if (msg.includes('Undefined symbol')) {
+        setResult('Error: Invalid Symbol');
+      } else if (msg.includes('Division by zero') || msg.includes('Infinity')) {
         setResult('Error: Math Error (Invalid Operation)');
-      } else if (e.message.includes('stack')) {
+      } else if (msg.includes('Too many') || msg.includes('stack')) {
         setResult('Error: Expression Too Complex');
       } else {
         setResult('Error: Invalid Input');
@@ -557,7 +676,7 @@ const ProfessionalCalculator: React.FC = () => {
       }),
     ]).start(() => {
       saveToHistory(input, result);
-      setInput(result);
+      setInput(result.replace(/,/g, '')); // Remove commas for next input
       setResult('');
       setJustEvaluated(false);
       exprFadeAnim.setValue(1);
@@ -753,7 +872,7 @@ const ProfessionalCalculator: React.FC = () => {
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.iconButton, { position: 'absolute', left: 10, bottom: 50 }]}
-          onPress={() => navigation.navigate('Tabs', { screen: 'Calculator' })}
+          onPress={() => navigation.replace('Tabs', { screen: 'Calculator' })}
         >
           <MaterialCommunityIcons name="calculator" size={20} color="#ffcc80" />
         </TouchableOpacity>
@@ -775,8 +894,8 @@ const ProfessionalCalculator: React.FC = () => {
             <TextInput
               ref={inputRef}
               style={[styles.inputText, { fontSize: 30 }]}
-              value={input}
-              onChangeText={setInput}
+              value={formatWithCommas(input)}
+              onChangeText={(t) => setInput(t.replace(/,/g, ''))}
               multiline={false}
               cursorColor="#FFFDD0"
               selectionColor="#888"

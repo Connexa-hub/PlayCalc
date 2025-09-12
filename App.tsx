@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { StatusBar } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Provider as PaperProvider } from 'react-native-paper';
-import { NavigationContainer } from '@react-navigation/native';
+import { NavigationContainer, DefaultTheme, DarkTheme } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -14,16 +15,48 @@ import MainConverterScreen from './src/screens/MainConverterScreen';
 import CurrencySelectionScreen from './src/screens/CurrencySelectionScreen';
 import CurrencySearchScreen from './src/screens/CurrencySearchScreen';
 import CustomSplash from './src/screens/CustomSplash';
+import DedicationScreen from './src/screens/DedicationScreen';
+import PrivacyTermsScreen from './src/screens/PrivacyTermsScreen';
+import TutorialScreen from './src/screens/TutorialScreen';
 import { CurrencyProvider } from './src/context/CurrencyContext';
 
-SplashScreen.preventAutoHideAsync(); // ⛔️ Don't auto-hide native splash
+SplashScreen.preventAutoHideAsync();
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
 
-function ConverterStack() {
+const MyDarkTheme = {
+  ...DarkTheme,
+  colors: {
+    ...DarkTheme.colors,
+    background: '#121212',
+    card: '#121212',
+    border: '#232323',
+    text: '#fafafa',
+    primary: '#00e676',
+  },
+};
+
+function OnboardingStack() {
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="Dedication" component={DedicationScreen} />
+      <Stack.Screen name="PrivacyTerms" component={PrivacyTermsScreen} />
+      <Stack.Screen name="Tutorial" component={TutorialScreen} />
+    </Stack.Navigator>
+  );
+}
+
+function ConverterStack() {
+  return (
+    <Stack.Navigator
+      screenOptions={{
+        headerShown: false,
+        animation: 'slide_from_right',
+        contentStyle: { backgroundColor: '#121212' }, // removes white flash
+        cardStyle: { backgroundColor: '#121212' },
+      }}
+    >
       <Stack.Screen name="MainConverter" component={MainConverterScreen} />
       <Stack.Screen name="CurrencySelection" component={CurrencySelectionScreen} />
       <Stack.Screen name="CurrencySearch" component={CurrencySearchScreen} />
@@ -48,7 +81,7 @@ function TabNavigator() {
           let iconName = 'calculator';
           if (route.name === 'Calculator') iconName = 'calculator-variant';
           if (route.name === 'Converter') iconName = 'currency-usd';
-          return <MaterialCommunityIcons name={iconName} color={color} size={26} />;
+          return <MaterialCommunityIcons name={iconName} size={26} color={color} />;
         },
       })}
     >
@@ -64,48 +97,80 @@ function TabNavigator() {
   );
 }
 
-function MainStack() {
+function MainStack({ initialRoute }: { initialRoute: string }) {
   return (
-    <Stack.Navigator screenOptions={{ headerShown: false }}>
+    <Stack.Navigator
+      screenOptions={{
+        headerShown: false,
+        animation: 'slide_from_right',
+        contentStyle: { backgroundColor: '#121212' },
+        cardStyle: { backgroundColor: '#121212' },
+      }}
+      initialRouteName={initialRoute}
+    >
       <Stack.Screen name="Tabs" component={TabNavigator} />
       <Stack.Screen
         name="ProfessionalCalculator"
         component={ProfessionalCalculator}
-        options={{
-          presentation: 'modal',
-        }}
+        options={{ presentation: 'modal' }}
       />
+      {/* Onboarding screens */}
+      <Stack.Screen name="Dedication" component={DedicationScreen} />
+      <Stack.Screen name="PrivacyTerms" component={PrivacyTermsScreen} />
+      <Stack.Screen name="Tutorial" component={TutorialScreen} />
     </Stack.Navigator>
   );
 }
 
 export default function App() {
   const [ready, setReady] = useState(false);
+  const [initialRoute, setInitialRoute] = useState<string | null>(null);
 
-useEffect(() => {
-  const prepareApp = async () => {
-    try {
-      // Load fonts, data, etc.
-      await new Promise(resolve => setTimeout(resolve, 4000));
-    } catch (e) {
-      console.warn('App loading error:', e);
-    } finally {
-      await SplashScreen.hideAsync();
-      setReady(true); // triggers splash fade-out
-    }
-  };
+  useEffect(() => {
+    const checkProgress = async () => {
+      try {
+        const dedicationDone = await AsyncStorage.getItem('dedicationDone');
+        const privacyDone = await AsyncStorage.getItem('privacyDone');
+        const tutorialDone = await AsyncStorage.getItem('tutorialDone');
 
-  prepareApp();
-}, []);
+        if (!dedicationDone) {
+          setInitialRoute('Dedication');
+        } else if (!privacyDone) {
+          setInitialRoute('PrivacyTerms');
+        } else if (!tutorialDone) {
+          setInitialRoute('Tutorial');
+        } else {
+          setInitialRoute('Tabs');
+        }
+      } catch (e) {
+        console.warn('Error checking onboarding state:', e);
+        setInitialRoute('Dedication');
+      }
+    };
+
+    const prepareApp = async () => {
+      try {
+        await new Promise(resolve => setTimeout(resolve, 4000));
+      } catch (e) {
+        console.warn('App loading error:', e);
+      } finally {
+        await SplashScreen.hideAsync();
+        setReady(true);
+      }
+    };
+
+    checkProgress();
+    prepareApp();
+  }, []);
 
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
+    <GestureHandlerRootView style={{ flex: 1, backgroundColor: '#121212' }}>
       <CurrencyProvider>
         <PaperProvider>
           <StatusBar barStyle="light-content" backgroundColor="#121212" />
           {ready ? (
-            <NavigationContainer>
-              <MainStack />
+            <NavigationContainer theme={MyDarkTheme}>
+              {initialRoute && <MainStack initialRoute={initialRoute} />}
             </NavigationContainer>
           ) : (
             <CustomSplash onFinish={() => setReady(true)} />
