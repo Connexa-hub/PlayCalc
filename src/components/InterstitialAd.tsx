@@ -1,15 +1,27 @@
-import { AdMobInterstitial } from 'expo-ads-admob';
+import { InterstitialAd, AdEventType, TestIds } from 'react-native-google-mobile-ads';
 
-const INTERSTITIAL_ID = __DEV__
-  ? 'ca-app-pub-3940256099942544/1033173712'
-  : 'ca-app-pub-xxxxxxxxxxxxxxxx/xxxxxxxxxx';
+const adUnitId = __DEV__ ? TestIds.INTERSTITIAL : 'YOUR_REAL_INTERSTITIAL_AD_UNIT_ID';
 
-export async function showInterstitial() {
-  try {
-    await AdMobInterstitial.setAdUnitID(INTERSTITIAL_ID);
-    await AdMobInterstitial.requestAdAsync({ servePersonalizedAds: true });
-    await AdMobInterstitial.showAdAsync();
-  } catch (e) {
-    console.log('Interstitial Ad error:', e);
+const interstitial = InterstitialAd.createForAdRequest(adUnitId, {
+  requestNonPersonalizedAdsOnly: true,
+});
+
+let isLoaded = false;
+
+// Preload the interstitial
+interstitial.load();
+
+interstitial.addAdEventListener(AdEventType.LOADED, () => {
+  isLoaded = true;
+});
+
+interstitial.addAdEventListener(AdEventType.CLOSED, () => {
+  isLoaded = false;
+  interstitial.load(); // Reload for next time
+});
+
+export const showInterstitial = () => {
+  if (isLoaded) {
+    interstitial.show();
   }
-}
+};

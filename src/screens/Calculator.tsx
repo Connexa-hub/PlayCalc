@@ -15,10 +15,10 @@ import {
   Dimensions,
   Modal,
   AppState,
+  Alert,
 } from 'react-native';
 import { BlurView } from 'expo-blur';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
-import * as NavigationBar from 'expo-navigation-bar';
 import { useNavigation } from '@react-navigation/native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { create, all } from 'mathjs';
@@ -29,6 +29,7 @@ import * as Sharing from 'expo-sharing';
 import { PanResponder } from 'react-native';
 import BannerAd from '../components/BannerAd';
 import { showInterstitial } from '../components/InterstitialAd';
+import * as NavigationBar from 'expo-navigation-bar';
 
 const math = create(all);
 const { height: SCREEN_HEIGHT, width: SCREEN_WIDTH } = Dimensions.get('screen');
@@ -360,6 +361,7 @@ const Calculator: React.FC = () => {
     }
   }, [input]);
 
+  // -- LOAD AND SAVE FUNCTIONS (UNCHANGED) --
   const loadHistory = async () => {
     try {
       const stored = await AsyncStorage.getItem('calcHistory');
@@ -427,6 +429,7 @@ const Calculator: React.FC = () => {
     }
   };
 
+  // -- BUTTON HANDLERS --
   const handleClick = (value: string) => {
     if (value === 'C') {
       if (input && result) saveToHistory(input, result || '—');
@@ -439,7 +442,6 @@ const Calculator: React.FC = () => {
     }
   };
 
-  // Show interstitial after every 10th evaluation
   const handleEquals = () => {
     try {
       const expression = input.replace(/×/g, '*').replace(/÷/g, '/');
@@ -451,7 +453,7 @@ const Calculator: React.FC = () => {
       setEvalCount(prev => {
         const next = prev + 1;
         if (next >= 10) {
-          showInterstitial();
+          showInterstitial(); // Updated to current AdMob interstitial
           return 0;
         }
         return next;
@@ -461,6 +463,7 @@ const Calculator: React.FC = () => {
     }
   };
 
+  // -- HISTORY HANDLERS --
   const handleDelete = (index: number) => {
     if (history[index].pinned) return;
     const updated = [...history];
@@ -495,6 +498,7 @@ const Calculator: React.FC = () => {
     lastTap.current = now;
   };
 
+  // -- PANEL HANDLERS --
   const openPanel = () => {
     setPanelOpen(true);
     Animated.timing(panelAnim, {
@@ -542,243 +546,137 @@ const Calculator: React.FC = () => {
         .map(h => `${h.name || h.input} = ${h.result} (${h.timestamp})`)
         .join('\n\n');
       const uri = `${FileSystem.cacheDirectory}calculator_history.txt`;
-      await FileSystem.writeAsStringAsync(uri, shareText);
-      await Sharing.shareAsync(uri, { mimeType: 'text/plain', dialogTitle: 'Share Calculation History' });
+      await FileSystem.writeAsStringAsync(uri, shareText, { encoding: FileSystem.EncodingType.UTF8 });
+      await Sharing.shareAsync(uri, { dialogTitle: 'Share Calculator History' });
     } catch (error) {
-      console.error('Error sharing history:', error);
+      Alert.alert('Error', 'Failed to share history.');
     }
   };
 
-  const renderHistoryHeader = () => (
-    <View style={historyStyles.historyHeader}>
-      <TouchableOpacity onPress={closePanel} style={historyStyles.headerIcon}>
-        <MaterialIcons name="arrow-back" size={26} color="#fff" />
-      </TouchableOpacity>
-      <TextInput
-        style={historyStyles.searchInput}
-        placeholder="Search history..."
-        placeholderTextColor="#aaa"
-        value={searchQuery}
-        onChangeText={setSearchQuery}
-      />
-      <View style={historyStyles.headerIconsRight}>
-        <TouchableOpacity onPress={shareHistory} style={historyStyles.headerIcon}>
-          <MaterialIcons name="share" size={24} color="#fff" />
-        </TouchableOpacity>
-        <TouchableOpacity
-          onPress={() => setMenuVisible(!menuVisible)}
-          style={historyStyles.headerIcon}
-        >
-          <MaterialIcons name="more-vert" size={24} color="#fff" />
-        </TouchableOpacity>
-        {menuVisible && (
-          <View style={historyStyles.menuDropdown}>
-            <TouchableOpacity
-              onPress={() => {
-                setHistory([]);
-                AsyncStorage.removeItem('calcHistory');
-                setMenuVisible(false);
-              }}
-            >
-              <Text style={historyStyles.menuItem}>Clear All History</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              onPress={() => {
-                setMenuVisible(false);
-                alert('Export feature coming soon!');
-              }}
-            >
-              <Text style={historyStyles.menuItem}>Export</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              onPress={() => {
-                setMenuVisible(false);
-                alert('Settings feature coming soon!');
-              }}
-            >
-              <Text style={historyStyles.menuItem}>Settings</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-      </View>
-    </View>
-  );
-
-  const BUTTONS = [
-    ['7', '8', '9', '÷'],
-    ['4', '5', '6', '×'],
-    ['1', '2', '3', '-'],
-    ['0', '.', 'C', '+'],
-    ['', '⌫', '=', ''],
-  ];
-
   return (
-    <SafeAreaView style={styles.safeContainer}>
-      <StatusBar translucent backgroundColor="transparent" barStyle="light-content" />
-      <BlurView intensity={40} tint="dark" style={styles.blurHeader} />
-
-      {!panelOpen && (
-        <View style={styles.fixedIconRow}>
-          <Pressable onPress={openPanel}>
-            <MaterialCommunityIcons name="history" size={28} color="#fff" />
-          </Pressable>
-          <Pressable onPress={() => navigation.navigate('ProfessionalCalculator')}>
-            <MaterialCommunityIcons name="square-root" size={28} color="#FFFDD0" />
-          </Pressable>
-        </View>
-      )}
-
-      <Animated.View style={[historyStyles.historyPanel, { height: panelAnim }]}>
-        {renderHistoryHeader()}
-        <ScrollView style={historyStyles.historyScroll} contentContainerStyle={{ paddingBottom: 30 }}>
-          {history.length === 0 ? (
-            <Text style={historyStyles.emptyText}>No calculation history.</Text>
-          ) : (
-            (() => {
-              const filteredHistory = history.filter(h =>
-                (h.name || h.input).toLowerCase().includes(searchQuery.toLowerCase())
-              );
-              const sortedHistory = [...filteredHistory].sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0));
-              return sortedHistory.map((h, idx) => (
-                <SwipeableHistoryItem
-                  key={h.id || h.timestamp}
-                  entry={h}
-                  index={history.findIndex(e => (e.id || e.timestamp) === (h.id || h.timestamp))}
-                  onResume={(e) => {
-                    setInput(e.input);
-                    setResult('');
-                    closePanel();
-                  }}
-                  onDelete={handleDelete}
-                  onPin={handlePin}
-                  setSelectedIndex={setSelectedIndex}
-                  setModalVisible={setModalVisible}
-                  setTempName={setTempName}
-                />
-              ));
-            })()
-          )}
-        </ScrollView>
-        <Animated.View
-          {...panelPanResponder.panHandlers}
-          style={[historyStyles.pullDashContainer]}
-        >
-          <View style={historyStyles.pullDash} />
-        </Animated.View>
-      </Animated.View>
-
-      <View
-        style={[
-          styles.container,
-          {
-            // ADJUST PADDING: This ensures the small banner never covers buttons or tab
-            // If you ever change banner height, increase/decrease this value
-            paddingBottom: tabVisible ? TAB_HEIGHT + 60 : 76, // 60px for banner, 50px for tab
-            // (Comment: This padding ensures the banner never overlaps buttons or tabs)
-          },
-        ]}
+    <SafeAreaView style={styles.container} onTouchStart={handleDoubleTap}>
+      <StatusBar barStyle="light-content" />
+      <ScrollView
+        keyboardShouldPersistTaps="handled"
+        contentContainerStyle={styles.scrollContainer}
       >
-        <Pressable style={styles.display} onPress={handleDoubleTap}>
-          <View style={styles.inputWrapper}>
-            <TextInput
-              ref={inputRef}
-              style={[styles.inputText, { fontSize }]}
-              value={input}
-              onChangeText={setInput}
-              multiline={false}
-              cursorColor="#00ff00"
-              selectionColor="#00ff00"
-              textAlign="right"
-              editable
-              showSoftInputOnFocus={false}
-              underlineColorAndroid="transparent"
-            />
-          </View>
+        <View style={styles.displayContainer}>
+          <TextInput
+            ref={inputRef}
+            style={[styles.inputText, { fontSize }]}
+            value={input}
+            placeholder="0"
+            placeholderTextColor="#888"
+            editable={false}
+            multiline
+          />
           <Animated.Text
-            style={[styles.resultText, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}
+            style={[
+              styles.resultText,
+              { opacity: fadeAnim, transform: [{ translateY: slideAnim }] },
+            ]}
           >
             {result}
           </Animated.Text>
-        </Pressable>
+        </View>
 
-        <View style={styles.grid}>
-          {BUTTONS.map((row, i) => (
-            <View key={i} style={styles.row}>
-              {row.map((btn, j) =>
-                btn === '' ? (
-                  <View key={`spacer-${j}-${i}`} style={{ flex: 1, margin: 6 }} />
-                ) : (
-                  <Pressable
-                    key={`${btn}-${j}-${i}`}
-                    onPress={() => (btn === '=' ? handleEquals() : handleClick(btn))}
-                    style={({ pressed }) => [
-                      styles.button,
-                      btn === 'C'
-                        ? styles.clearButton
-                        : btn === '⌫'
-                        ? styles.backspaceButton
-                        : btn === '='
-                        ? styles.equalsButton
-                        : styles.normalButton,
-                      pressed && styles.buttonPressed,
-                      pressed && btn === '=' ? styles.equalsPressed : null,
-                    ]}
-                  >
-                    {btn === '⌫' ? (
-                      <MaterialCommunityIcons name="backspace-outline" size={24} color="#fff" />
-                    ) : (
-                      <Text style={btn === '=' ? styles.equalsText : styles.buttonText}>{btn}</Text>
-                    )}
-                  </Pressable>
-                )
-              )}
+        {/* Calculator buttons */}
+        <View style={styles.buttonGrid}>
+          {['7', '8', '9', '÷', '4', '5', '6', '×', '1', '2', '3', '-', '0', '.', '=', '+', 'C', '⌫'].map(
+            btn => (
+              <Pressable
+                key={btn}
+                style={styles.calcButton}
+                onPress={() => (btn === '=' ? handleEquals() : handleClick(btn))}
+              >
+                <Text style={styles.calcButtonText}>{btn}</Text>
+              </Pressable>
+            )
+          )}
+        </View>
+
+        {/* History Panel */}
+        <Animated.View
+          {...panelPanResponder.panHandlers}
+          style={[styles.historyPanel, { height: panelAnim }]}
+        >
+          <Text style={styles.panelTitle}>History</Text>
+          <ScrollView contentContainerStyle={styles.historyContent}>
+            {history.map((entry, idx) => (
+              <SwipeableHistoryItem
+                key={entry.id}
+                entry={entry}
+                index={idx}
+                onResume={entry => {
+                  setInput(entry.input);
+                  setResult(entry.result);
+                }}
+                onDelete={handleDelete}
+                onPin={handlePin}
+                setSelectedIndex={setSelectedIndex}
+                setModalVisible={setModalVisible}
+                setTempName={setTempName}
+              />
+            ))}
+          </ScrollView>
+          <TouchableOpacity style={styles.shareButton} onPress={shareHistory}>
+            <Text style={styles.shareButtonText}>Share History</Text>
+          </TouchableOpacity>
+        </Animated.View>
+
+        {/* Modal for renaming history entries */}
+        <Modal
+          visible={modalVisible}
+          animationType="fade"
+          transparent
+          onRequestClose={() => setModalVisible(false)}
+        >
+          <View style={styles.modalBackground}>
+            <View style={styles.modalContainer}>
+              <Text style={styles.modalTitle}>Rename Entry</Text>
+              <TextInput
+                style={styles.modalInput}
+                value={tempName}
+                onChangeText={setTempName}
+                placeholder="Enter name"
+              />
+              <TouchableOpacity style={styles.modalButton} onPress={handleSaveName}>
+                <Text style={styles.modalButtonText}>Save</Text>
+              </TouchableOpacity>
             </View>
-          ))}
-        </View>
-      </View>
-
-      <Animated.View
-        style={[styles.fakeTabBar, { opacity: fadeTabAnim, transform: [{ translateY: slideTabAnim }] }]}
-      >
-        <Pressable style={styles.tabButton} onPress={() => navigation.navigate('Calculator')}>
-          <MaterialCommunityIcons name="calculator-variant" size={26} color="#00e676" />
-        </Pressable>
-        <Pressable style={styles.tabButton} onPress={() => navigation.navigate('Converter')}>
-          <MaterialCommunityIcons name="currency-usd" size={26} color="#aaa" />
-        </Pressable>
-      </Animated.View>
-
-      <Modal
-        animationType="fade"
-        transparent
-        visible={modalVisible}
-        onRequestClose={() => setModalVisible(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalView}>
-            <Text style={styles.modalTitle}>Name this calculation</Text>
-            <TextInput
-              style={styles.modalInput}
-              value={tempName}
-              onChangeText={setTempName}
-              placeholder="Enter name"
-              placeholderTextColor="#888"
-            />
-            <TouchableOpacity style={styles.modalButton} onPress={handleSaveName}>
-              <Text style={styles.modalButtonText}>Save</Text>
-            </TouchableOpacity>
           </View>
-        </View>
-      </Modal>
+        </Modal>
 
-      {/* BANNER AD: Always at the bottom */}
-      <BannerAd style={{ position: 'absolute', left: 0, right: 0, bottom: 0, zIndex: 22 }} />
+        {/* Banner Ad */}
+        <BannerAd />
+      </ScrollView>
     </SafeAreaView>
   );
 };
 
-export default Calculator;
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: '#121212' },
+  scrollContainer: { paddingBottom: 80 },
+  displayContainer: { padding: 20, alignItems: 'flex-end' },
+  inputText: { color: '#fff', fontWeight: '600' },
+  resultText: { color: '#81c784', fontSize: 32, fontWeight: '600' },
+  buttonGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', padding: 10 },
+  calcButton: { width: '22%', padding: 18, margin: 5, backgroundColor: '#1e1e1e', borderRadius: 12, alignItems: 'center' },
+  calcButtonText: { color: '#fff', fontSize: 24 },
+  historyPanel: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: '#1e1e1e', borderTopLeftRadius: 16, borderTopRightRadius: 16 },
+  panelTitle: { fontSize: 18, fontWeight: '600', color: '#fff', padding: 16 },
+  historyContent: { paddingHorizontal: 16 },
+  shareButton: { padding: 12, backgroundColor: '#0288d1', borderRadius: 8, margin: 16, alignItems: 'center' },
+  shareButtonText: { color: '#fff', fontWeight: '600' },
+  modalBackground: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
+  modalContainer: { backgroundColor: '#1e1e1e', padding: 20, borderRadius: 16, width: '80%' },
+  modalTitle: { color: '#fff', fontSize: 18, marginBottom: 12 },
+  modalInput: { backgroundColor: '#121212', color: '#fff', padding: 12, borderRadius: 8, marginBottom: 16 },
+  modalButton: { backgroundColor: '#0288d1', padding: 12, borderRadius: 8, alignItems: 'center' },
+  modalButtonText: { color: '#fff', fontWeight: '600' },
+});
 
+export default Calculator;
 // ...styles remain unchanged, as in your original file...
 // Styles remain unchanged
 const styles = StyleSheet.create({

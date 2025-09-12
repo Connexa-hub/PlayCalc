@@ -1,28 +1,26 @@
 import React from 'react';
 import { View, StyleSheet } from 'react-native';
-import { AdMobBanner } from 'expo-ads-admob';
+import {
+  BannerAd as RNBannerAd,
+  BannerAdSize,
+  TestIds,
+} from 'react-native-google-mobile-ads';
 
-const BANNER_ID = __DEV__
-  ? 'ca-app-pub-3940256099942544/6300978111'
-  : 'ca-app-pub-xxxxxxxxxxxxxxxx/xxxxxxxxxx';
+const adUnitId = __DEV__ ? TestIds.BANNER : 'YOUR_REAL_BANNER_AD_UNIT_ID';
 
-export default function BannerAd({ style = {} }) {
+const BannerAd: React.FC<{ style?: any }> = ({ style }) => {
   return (
     <View style={[styles.container, style]}>
-      <AdMobBanner
-        bannerSize="smartBannerPortrait"
-        adUnitID={BANNER_ID}
-        servePersonalizedAds
-        onDidFailToReceiveAdWithError={err => console.log('Ad error:', err)}
-      />
+      <RNBannerAd unitId={adUnitId} size={BannerAdSize.BANNER} />
     </View>
   );
-}
+};
+
+export default BannerAd;
 
 const styles = StyleSheet.create({
   container: {
     alignItems: 'center',
-    marginVertical: 0,
-    backgroundColor: 'transparent',
+    justifyContent: 'center',
   },
 });
