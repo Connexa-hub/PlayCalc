@@ -1,4 +1,4 @@
-name: EAS Build APK
+name: EAS Build APK (Preview)
 
 on:
   push:
@@ -22,7 +22,7 @@ jobs:
       - name: Install EAS CLI
         run: npm install -g eas-cli
 
-      - name: Build APK with EAS
+      - name: Build APK with EAS (Preview)
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
         run: eas build --platform android --profile preview --non-interactive
