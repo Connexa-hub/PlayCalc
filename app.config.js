@@ -30,7 +30,13 @@ export default ({ config }) => ({
       favicon: "./assets/favicon.png",
     },
     plugins: [
-      "react-native-google-mobile-ads" // ✅ Added here
+      [
+        "react-native-google-mobile-ads",
+        {
+          androidAppId: "ca-app-pub-3940256099942544~3347511713", // Test App ID
+          iosAppId: "ca-app-pub-3940256099942544~1458002511",     // Test App ID
+        },
+      ],
     ],
     extra: {
       API_KEY: process.env.API_KEY,
