@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -15,10 +15,11 @@ import {
   Dimensions,
   Modal,
   AppState,
-  Alert,
+  PanResponder,
 } from 'react-native';
 import { BlurView } from 'expo-blur';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
+import * as NavigationBar from 'expo-navigation-bar';
 import { useNavigation } from '@react-navigation/native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { create, all } from 'mathjs';
@@ -26,16 +27,22 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ScreenOrientation from 'expo-screen-orientation';
 import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
-import { PanResponder } from 'react-native';
 import BannerAd from '../components/BannerAd';
 import { showInterstitial } from '../components/InterstitialAd';
-import * as NavigationBar from 'expo-navigation-bar';
 
 const math = create(all);
 const { height: SCREEN_HEIGHT, width: SCREEN_WIDTH } = Dimensions.get('screen');
 const TAB_HEIGHT = 50;
 
-// Type Definitions
+// Key: Adjust this value to control the tiny gap between buttons-ad and ad-tab (or buttons-ad when tab hidden)
+const TINY_GAP = 1; // <<< Tweak this for more/less space (set to 0 for no space)
+
+// Key: Adjust this based on the actual height of your BannerAd component (e.g., 50 for standard banner ads)
+const AD_HEIGHT = 50; // <<< Tweak this if your ad height differs
+
+// Key: Adjust this value to add horizontal padding to the button grid when tab is visible, reducing button size to address space needs
+const BUTTON_REDUCTION_PADDING = 10; // <<< Tweak this to make buttons smaller when tab visible (higher value = smaller buttons)
+
 interface HistoryEntry {
   id: string;
   input: string;
@@ -58,7 +65,12 @@ interface SwipeableHistoryItemProps {
 
 const getInitials = (str: string): string => {
   if (!str) return '';
-  return str.split(' ').map(s => s[0]).join('').slice(0, 2).toUpperCase();
+  return str
+    .split(' ')
+    .map(s => s[0])
+    .join('')
+    .slice(0, 2)
+    .toUpperCase();
 };
 
 const AVATAR_COLORS = ['#81c784', '#64b5f6', '#ffb74d', '#ff8a65', '#ba68c8', '#ffd54f', '#4db6ac'];
@@ -129,7 +141,14 @@ export const SwipeableHistoryItem: React.FC<SwipeableHistoryItemProps> = ({
       onPanResponderGrant: () => {
         if (isRemoving) return;
         animX.stopAnimation();
-        animX.setOffset(animX._value);
+        // using internal value to set offset; this is acceptable at runtime
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const current: any = animX;
+        try {
+          current.setOffset(current._value);
+        } catch {
+          // fallback if _value is not available
+        }
         animX.setValue(0);
         setSwiping(null);
       },
@@ -243,6 +262,11 @@ export const SwipeableHistoryItem: React.FC<SwipeableHistoryItemProps> = ({
   );
 };
 
+// ------ Banner Ad logic ------
+const HISTORY_BANNER_INSERT_CHANCE = 0.3; // 30% chance to show banner in history scroll
+const HISTORY_BANNER_MAX = 2; // Max 2 banners per history scroll
+const HISTORY_BANNER_PLACE_MAX = 20; // Only show banner if history length is at least 5
+
 const Calculator: React.FC = () => {
   const navigation = useNavigation();
   const [input, setInput] = useState<string>('');
@@ -255,7 +279,6 @@ const Calculator: React.FC = () => {
   const [tempName, setTempName] = useState<string>('');
   const [menuVisible, setMenuVisible] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>('');
-  const [evalCount, setEvalCount] = useState(0);
 
   const MAX_FONT = 48;
   const MIN_FONT = 16;
@@ -265,15 +288,37 @@ const Calculator: React.FC = () => {
   const slideAnim = useRef(new Animated.Value(20)).current;
   const fadeTabAnim = useRef(new Animated.Value(0)).current;
   const slideTabAnim = useRef(new Animated.Value(TAB_HEIGHT)).current;
-  const panelAnim = useRef(new Animated.Value(0)).current;
-  const initialPanelValue = useRef(0);
+
+  // PANEL ANIMATION: use translateY (closed = SCREEN_HEIGHT, open = 0)
+  const panelAnim = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
+  // keep a JS-side latest value via listener so pan responder logic can read it reliably
+  const panelAnimValue = useRef<number>(SCREEN_HEIGHT);
+  useEffect(() => {
+    const id = panelAnim.addListener(({ value }) => {
+      panelAnimValue.current = value;
+    });
+    return () => {
+      try {
+        panelAnim.removeListener(id);
+      } catch {}
+    };
+  }, [panelAnim]);
+
+  const initialPanelValue = useRef<number>(SCREEN_HEIGHT);
 
   const lastTap = useRef<number | null>(null);
-  const inputRef = useRef<TextInput>(null);
+  // ensure TextInput ref typing allows null
+  const inputRef = useRef<TextInput | null>(null);
+  const [selection, setSelection] = useState<{ start: number; end: number } | null>(null);
+
+  // --- Interstitial ad evaluation count ---
+  const [evalCount, setEvalCount] = useState(0);
 
   useEffect(() => {
+    // === Hook Setup ===
     const setup = async () => {
       try {
+        // Lock orientation to portrait when the component mounts
         await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP);
         await NavigationBar.setVisibilityAsync('hidden');
         await NavigationBar.setBehaviorAsync('overlay-swipe');
@@ -287,6 +332,7 @@ const Calculator: React.FC = () => {
 
     setup();
 
+    // Navigation focus listener to ensure portrait mode on screen focus
     const unsubscribe = navigation.addListener('focus', async () => {
       try {
         await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP);
@@ -295,9 +341,12 @@ const Calculator: React.FC = () => {
       }
     });
 
+    // === Hook Cleanup (return) ===
     return () => {
+      // Reset to portrait when unmounting
       ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP)
         .catch(error => console.error('Error resetting orientation on unmount:', error));
+      // Remove navigation listener
       unsubscribe();
     };
   }, [navigation]);
@@ -330,7 +379,8 @@ const Calculator: React.FC = () => {
 
   useEffect(() => {
     if (inputRef.current) {
-      inputRef.current.setNativeProps({ showSoftInputOnFocus: false });
+      // Type assertion for setNativeProps availability
+      (inputRef.current as any).setNativeProps({ showSoftInputOnFocus: false });
     }
   }, []);
 
@@ -361,7 +411,17 @@ const Calculator: React.FC = () => {
     }
   }, [input]);
 
-  // -- LOAD AND SAVE FUNCTIONS (UNCHANGED) --
+  const formatNumberWithCommas = (value: string): string => {
+    const parts = value.split('.');
+    const integerPart = parts[0].replace(/[^0-9-]/g, '');
+    const formattedInteger = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+    return parts.length > 1 ? `${formattedInteger}.${parts[1]}` : formattedInteger;
+  };
+
+  const parseNumberWithCommas = (value: string): string => {
+    return value.replace(/,/g, '');
+  };
+
   const loadHistory = async () => {
     try {
       const stored = await AsyncStorage.getItem('calcHistory');
@@ -371,6 +431,7 @@ const Calculator: React.FC = () => {
           pinned: entry.pinned ?? false,
           name: entry.name ?? '',
           id: entry.id || `${entry.timestamp}${Math.random().toString(36).slice(2)}`,
+          result: formatNumberWithCommas(entry.result),
         }));
         setHistory(parsed);
       }
@@ -385,7 +446,7 @@ const Calculator: React.FC = () => {
       if (stored) {
         const { input, result } = JSON.parse(stored);
         setInput(input);
-        setResult(result);
+        setResult(result ? formatNumberWithCommas(result) : '');
       }
     } catch (error) {
       console.error('Error loading current:', error);
@@ -394,19 +455,19 @@ const Calculator: React.FC = () => {
 
   const saveCurrent = async () => {
     try {
-      await AsyncStorage.setItem('calcCurrent', JSON.stringify({ input, result }));
+      await AsyncStorage.setItem('calcCurrent', JSON.stringify({ input, result: parseNumberWithCommas(result) }));
     } catch (error) {
       console.error('Error saving current:', error);
     }
   };
 
   const saveToHistory = async (expr: string, res: string) => {
-    if (!expr || !res || res === 'Error' || (history[0]?.input === expr && history[0]?.result === res))
+    if (!expr || !res || res === 'Error' || (history[0]?.input === expr && history[0]?.result === parseNumberWithCommas(res)))
       return;
     const timestamp = new Date().toLocaleString();
     const newEntry: HistoryEntry = {
       input: expr,
-      result: res,
+      result: formatNumberWithCommas(res),
       timestamp,
       pinned: false,
       name: '',
@@ -415,7 +476,10 @@ const Calculator: React.FC = () => {
     const updated = [newEntry, ...history];
     setHistory(updated);
     try {
-      await AsyncStorage.setItem('calcHistory', JSON.stringify(updated));
+      await AsyncStorage.setItem('calcHistory', JSON.stringify(updated.map(entry => ({
+        ...entry,
+        result: parseNumberWithCommas(entry.result)
+      }))));
     } catch (error) {
       console.error('Error saving history:', error);
     }
@@ -423,47 +487,63 @@ const Calculator: React.FC = () => {
 
   const updateHistoryStorage = async () => {
     try {
-      await AsyncStorage.setItem('calcHistory', JSON.stringify(history));
+      await AsyncStorage.setItem('calcHistory', JSON.stringify(history.map(entry => ({
+        ...entry,
+        result: parseNumberWithCommas(entry.result)
+      }))));
     } catch (error) {
       console.error('Error updating history:', error);
     }
   };
 
-  // -- BUTTON HANDLERS --
   const handleClick = (value: string) => {
     if (value === 'C') {
-      if (input && result) saveToHistory(input, result || '—');
+      if (input && result) saveToHistory(input, parseNumberWithCommas(result));
       setInput('');
       setResult('');
+      setSelection(null);
     } else if (value === '⌫') {
-      setInput(input.slice(0, -1));
+      if (selection && selection.start === selection.end && selection.start > 0) {
+        setInput(prev => prev.slice(0, selection.start - 1) + prev.slice(selection.start));
+        setSelection({ start: selection.start - 1, end: selection.start - 1 });
+      } else {
+        setInput(prev => prev.slice(0, -1));
+        setSelection(null);
+      }
     } else {
-      setInput(prev => prev + value);
+      if (selection && selection.start === selection.end) {
+        setInput(prev => prev.slice(0, selection.start) + value + prev.slice(selection.start));
+        setSelection({ start: selection.start + 1, end: selection.start + 1 });
+      } else {
+        setInput(prev => prev + value);
+        setSelection(null);
+      }
     }
   };
 
+  // ---- Interstitial Ad logic ----
   const handleEquals = () => {
     try {
       const expression = input.replace(/×/g, '*').replace(/÷/g, '/');
       const evalResult = math.evaluate(expression);
       const resultStr = evalResult.toString();
-      setResult(resultStr);
+      setResult(formatNumberWithCommas(resultStr));
       saveToHistory(input, resultStr);
 
       setEvalCount(prev => {
         const next = prev + 1;
-        if (next >= 10) {
-          showInterstitial(); // Updated to current AdMob interstitial
+        if (next >= 6) {
+          showInterstitial();
           return 0;
         }
         return next;
       });
+
     } catch {
       setResult('Error');
     }
   };
 
-  // -- HISTORY HANDLERS --
   const handleDelete = (index: number) => {
     if (history[index].pinned) return;
     const updated = [...history];
@@ -498,30 +578,34 @@ const Calculator: React.FC = () => {
     lastTap.current = now;
   };
 
-  // -- PANEL HANDLERS --
+  // OPEN / CLOSE using translateY (GPU accelerated)
   const openPanel = () => {
+    // make sure panel visible/interactable before animating in
     setPanelOpen(true);
     Animated.timing(panelAnim, {
-      toValue: SCREEN_HEIGHT,
+      toValue: 0,
       duration: 300,
-      useNativeDriver: false,
+      useNativeDriver: true,
     }).start();
   };
+
   const closePanel = () => {
-    setPanelOpen(false);
-    Animated.spring(panelAnim, {
-      toValue: 0,
-      bounciness: 8,
-      speed: 12,
-      useNativeDriver: false,
-    }).start();
+    Animated.timing(panelAnim, {
+      toValue: SCREEN_HEIGHT,
+      duration: 240,
+      useNativeDriver: true,
+    }).start(() => {
+      // Only set panelOpen to false after animation completes
+      setPanelOpen(false);
+    });
   };
 
   const panelPanResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
       onPanResponderGrant: () => {
-        initialPanelValue.current = panelAnim._value;
+        // set initial from the JS-side latest value
+        initialPanelValue.current = panelAnimValue.current ?? SCREEN_HEIGHT;
       },
       onPanResponderMove: (_, g) => {
         const newVal = initialPanelValue.current + g.dy;
@@ -529,12 +613,15 @@ const Calculator: React.FC = () => {
       },
       onPanResponderRelease: (_, g) => {
         const threshold = SCREEN_HEIGHT * 0.3;
+        const currentVal = panelAnimValue.current ?? 0;
+        // If the gesture pulls upward quickly, open the panel fully
         if (g.dy < -10 || g.vy < -0.1) {
-          closePanel();
-        } else if (panelAnim._value > threshold || g.vy > 0.2) {
           openPanel();
-        } else {
+        } else if (currentVal > threshold || g.vy > 0.3) {
+          // translateY > threshold (moved down enough) -> close
           closePanel();
+        } else {
+          openPanel();
         }
       },
     })
@@ -546,144 +633,306 @@ const Calculator: React.FC = () => {
         .map(h => `${h.name || h.input} = ${h.result} (${h.timestamp})`)
         .join('\n\n');
       const uri = `${FileSystem.cacheDirectory}calculator_history.txt`;
-      await FileSystem.writeAsStringAsync(uri, shareText, { encoding: FileSystem.EncodingType.UTF8 });
-      await Sharing.shareAsync(uri, { dialogTitle: 'Share Calculator History' });
+      await FileSystem.writeAsStringAsync(uri, shareText);
+      await Sharing.shareAsync(uri, { mimeType: 'text/plain', dialogTitle: 'Share Calculation History' });
     } catch (error) {
-      Alert.alert('Error', 'Failed to share history.');
+      console.error('Error sharing history:', error);
     }
   };
 
+  const renderHistoryHeader = () => (
+    <View style={historyStyles.historyHeader}>
+      <TouchableOpacity onPress={closePanel} style={historyStyles.headerIcon}>
+        <MaterialIcons name="arrow-back" size={26} color="#fff" />
+      </TouchableOpacity>
+      <TextInput
+        style={historyStyles.searchInput}
+        placeholder="Search history..."
+        placeholderTextColor="#aaa"
+        value={searchQuery}
+        onChangeText={setSearchQuery}
+      />
+      <View style={historyStyles.headerIconsRight}>
+        <TouchableOpacity onPress={shareHistory} style={historyStyles.headerIcon}>
+          <MaterialIcons name="share" size={24} color="#fff" />
+        </TouchableOpacity>
+        <TouchableOpacity
+          onPress={() => setMenuVisible(!menuVisible)}
+          style={historyStyles.headerIcon}
+        >
+          <MaterialIcons name="more-vert" size={24} color="#fff" />
+        </TouchableOpacity>
+        {menuVisible && (
+          <View style={historyStyles.menuDropdown}>
+            <TouchableOpacity
+              onPress={() => {
+                setHistory([]);
+                AsyncStorage.removeItem('calcHistory');
+                setMenuVisible(false);
+              }}
+            >
+              <Text style={historyStyles.menuItem}>Clear All History</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => {
+                setMenuVisible(false);
+                alert('Export feature coming soon!');
+              }}
+            >
+              <Text style={historyStyles.menuItem}>Export</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => {
+                setMenuVisible(false);
+                alert('Settings feature coming soon!');
+              }}
+            >
+              <Text style={historyStyles.menuItem}>Settings</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+      </View>
+    </View>
+  );
+
+  const BUTTONS = [
+    ['7', '8', '9', '÷'],
+    ['4', '5', '6', '×'],
+    ['1', '2', '3', '-'],
+    ['0', '.', 'C', '+'],
+    ['', '⌫', '=', ''],
+  ];
+
+  // --- History Panel with stable banner ad insertion ---
+  // Memoize the mixedItems based on history and searchQuery so it doesn't change on every render.
+  const getHistoryWithAdsStable = useMemo(() => {
+    return (filteredHistory: HistoryEntry[]) => {
+      if (filteredHistory.length < 5) return filteredHistory.map((h, idx) => ({ type: 'item', entry: h, idx }));
+      const arr: { type: 'item' | 'ad'; entry?: HistoryEntry; idx?: number }[] = [];
+      const maxBanner = Math.min(HISTORY_BANNER_MAX, Math.floor(filteredHistory.length / 5));
+      const bannerPositions: number[] = [];
+      // generate deterministic-ish positions based on content length to avoid reshuffle each render
+      for (let i = 1; i <= maxBanner; i++) {
+        const sliceStart = (i - 1) * Math.floor(filteredHistory.length / maxBanner);
+        const sliceEnd = Math.min(filteredHistory.length - 2, sliceStart + Math.floor(filteredHistory.length / maxBanner));
+        const pos = Math.min(filteredHistory.length - 2, Math.max(2, Math.floor(sliceStart + (sliceEnd - sliceStart) / 2)));
+        bannerPositions.push(pos);
+      }
+      let inserts = 0;
+      for (let i = 0; i < filteredHistory.length; i++) {
+        if (bannerPositions.includes(i) && inserts < maxBanner) {
+          arr.push({ type: 'ad' });
+          inserts++;
+        }
+        arr.push({ type: 'item', entry: filteredHistory[i], idx: i });
+      }
+      return arr;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // --- Banner Ad positioning: always absolute, adjust bottom based on tab visibility ---
+  const bannerAdBottomStyle = {
+    position: 'absolute' as const,
+    left: 0,
+    right: 0,
+    bottom: tabVisible ? TAB_HEIGHT + TINY_GAP : 0,
+  };
+
+  // --- Container padding to prevent buttons overlapping ad/tab ---
+  const containerPaddingBottom = AD_HEIGHT + TINY_GAP + (tabVisible ? TAB_HEIGHT + TINY_GAP : 0);
+
+  // --- Grid horizontal padding to reduce button size when tab visible ---
+  const gridPaddingHorizontal = tabVisible ? BUTTON_REDUCTION_PADDING : 0;
+
   return (
-    <SafeAreaView style={styles.container} onTouchStart={handleDoubleTap}>
-      <StatusBar barStyle="light-content" />
-      <ScrollView
-        keyboardShouldPersistTaps="handled"
-        contentContainerStyle={styles.scrollContainer}
+    <SafeAreaView style={styles.safeContainer}>
+      <StatusBar translucent backgroundColor="transparent" barStyle="light-content" />
+      <BlurView intensity={40} tint="dark" style={styles.blurHeader} />
+
+      {!panelOpen && (
+        <View style={styles.fixedIconRow}>
+          <Pressable onPress={openPanel}>
+            <MaterialCommunityIcons name="history" size={28} color="#fff" />
+          </Pressable>
+          <Pressable onPress={() => navigation.navigate('ProfessionalCalculator')}>
+            <MaterialCommunityIcons name="square-root" size={28} color="#FFFDD0" />
+          </Pressable>
+        </View>
+      )}
+
+      {/* --- History Panel with stable banner ad --- */}
+      <Animated.View
+        {...panelPanResponder.panHandlers}
+        pointerEvents={panelOpen ? 'auto' : 'none'}
+        style={[
+          historyStyles.historyPanel,
+          {
+            // keep panel full-screen height to avoid relayout; animate translateY
+            height: SCREEN_HEIGHT,
+            transform: [{ translateY: panelAnim }],
+            zIndex: panelOpen ? 15 : -1,
+          },
+        ]}
       >
-        <View style={styles.displayContainer}>
-          <TextInput
-            ref={inputRef}
-            style={[styles.inputText, { fontSize }]}
-            value={input}
-            placeholder="0"
-            placeholderTextColor="#888"
-            editable={false}
-            multiline
-          />
+        {renderHistoryHeader()}
+        <ScrollView style={historyStyles.historyScroll} contentContainerStyle={{ paddingBottom: 30 }}>
+          {history.length === 0 ? (
+            <Text style={historyStyles.emptyText}>No calculation history.</Text>
+          ) : (
+            (() => {
+              const filteredHistory = history.filter(h =>
+                (h.name || h.input).toLowerCase().includes(searchQuery.toLowerCase())
+              );
+              const sortedHistory = [...filteredHistory].sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0));
+              const mixedItems = getHistoryWithAdsStable(sortedHistory);
+              return mixedItems.map((item, i) => {
+                if (item.type === 'ad') {
+                  return (
+                    <View key={`banner-history-${i}`} style={{ marginVertical: 9, alignItems: 'center' }}>
+                      <BannerAd style={{}} />
+                    </View>
+                  );
+                } else if (item.type === 'item' && item.entry) {
+                  return (
+                    <SwipeableHistoryItem
+                      key={item.entry.id || item.entry.timestamp}
+                      entry={item.entry}
+                      index={history.findIndex(e => (e.id || e.timestamp) === (item.entry!.id || item.entry!.timestamp))}
+                      onResume={(e) => {
+                        setInput(e.input);
+                        setResult('');
+                        closePanel();
+                      }}
+                      onDelete={handleDelete}
+                      onPin={handlePin}
+                      setSelectedIndex={setSelectedIndex}
+                      setModalVisible={setModalVisible}
+                      setTempName={setTempName}
+                    />
+                  );
+                }
+                return null;
+              });
+            })()
+          )}
+        </ScrollView>
+      </Animated.View>
+
+      {/* Key: Container with dynamic paddingBottom to make space for ad and tab */}
+      <View style={[styles.container, { paddingBottom: containerPaddingBottom }]}>
+        <Pressable style={styles.display} onPress={handleDoubleTap}>
+          <View style={styles.inputWrapper}>
+            <TextInput
+              ref={inputRef}
+              style={[styles.inputText, { fontSize }]}
+              value={input}
+              onChangeText={setInput}
+              multiline={false}
+              cursorColor="#00ff00"
+              selectionColor="#00ff00"
+              textAlign="right"
+              editable
+              showSoftInputOnFocus={false}
+              underlineColorAndroid="transparent"
+              selection={selection}
+              onSelectionChange={({ nativeEvent: { selection } }) => setSelection(selection)}
+            />
+          </View>
           <Animated.Text
-            style={[
-              styles.resultText,
-              { opacity: fadeAnim, transform: [{ translateY: slideAnim }] },
-            ]}
+            style={[styles.resultText, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}
           >
             {result}
           </Animated.Text>
-        </View>
+        </Pressable>
 
-        {/* Calculator buttons */}
-        <View style={styles.buttonGrid}>
-          {['7', '8', '9', '÷', '4', '5', '6', '×', '1', '2', '3', '-', '0', '.', '=', '+', 'C', '⌫'].map(
-            btn => (
-              <Pressable
-                key={btn}
-                style={styles.calcButton}
-                onPress={() => (btn === '=' ? handleEquals() : handleClick(btn))}
-              >
-                <Text style={styles.calcButtonText}>{btn}</Text>
-              </Pressable>
-            )
-          )}
-        </View>
-
-        {/* History Panel */}
-        <Animated.View
-          {...panelPanResponder.panHandlers}
-          style={[styles.historyPanel, { height: panelAnim }]}
-        >
-          <Text style={styles.panelTitle}>History</Text>
-          <ScrollView contentContainerStyle={styles.historyContent}>
-            {history.map((entry, idx) => (
-              <SwipeableHistoryItem
-                key={entry.id}
-                entry={entry}
-                index={idx}
-                onResume={entry => {
-                  setInput(entry.input);
-                  setResult(entry.result);
-                }}
-                onDelete={handleDelete}
-                onPin={handlePin}
-                setSelectedIndex={setSelectedIndex}
-                setModalVisible={setModalVisible}
-                setTempName={setTempName}
-              />
-            ))}
-          </ScrollView>
-          <TouchableOpacity style={styles.shareButton} onPress={shareHistory}>
-            <Text style={styles.shareButtonText}>Share History</Text>
-          </TouchableOpacity>
-        </Animated.View>
-
-        {/* Modal for renaming history entries */}
-        <Modal
-          visible={modalVisible}
-          animationType="fade"
-          transparent
-          onRequestClose={() => setModalVisible(false)}
-        >
-          <View style={styles.modalBackground}>
-            <View style={styles.modalContainer}>
-              <Text style={styles.modalTitle}>Rename Entry</Text>
-              <TextInput
-                style={styles.modalInput}
-                value={tempName}
-                onChangeText={setTempName}
-                placeholder="Enter name"
-              />
-              <TouchableOpacity style={styles.modalButton} onPress={handleSaveName}>
-                <Text style={styles.modalButtonText}>Save</Text>
-              </TouchableOpacity>
+        {/* Key: Grid with dynamic paddingHorizontal to reduce button size when tab visible */}
+        <View style={[styles.grid, { paddingHorizontal: gridPaddingHorizontal }]}>
+          {BUTTONS.map((row, i) => (
+            <View key={i} style={styles.row}>
+              {row.map((btn, j) =>
+                btn === '' ? (
+                  <View key={`spacer-${j}-${i}`} style={{ flex: 1, margin: 6 }} />
+                ) : (
+                  <Pressable
+                    key={`${btn}-${j}-${i}`}
+                    onPress={() => (btn === '=' ? handleEquals() : handleClick(btn))}
+                    style={({ pressed }) => [
+                      styles.button,
+                      btn === 'C'
+                        ? styles.clearButton
+                        : btn === '⌫'
+                        ? styles.backspaceButton
+                        : btn === '='
+                        ? styles.equalsButton
+                        : styles.normalButton,
+                      pressed && styles.buttonPressed,
+                      pressed && btn === '=' ? styles.equalsPressed : null,
+                    ]}
+                  >
+                    {btn === '⌫' ? (
+                      <MaterialCommunityIcons name="backspace-outline" size={24} color="#fff" />
+                    ) : (
+                      <Text style={btn === '=' ? styles.equalsText : styles.buttonText}>{btn}</Text>
+                    )}
+                  </Pressable>
+                )
+              )}
             </View>
-          </View>
-        </Modal>
+          ))}
+        </View>
+      </View>
 
-        {/* Banner Ad */}
-        <BannerAd />
-      </ScrollView>
+      {/* Banner Ad always absolute, positioned based on tab visibility */}
+      <View style={[styles.bannerAdContainer, bannerAdBottomStyle]}>
+        <BannerAd style={{ alignSelf: 'center' }} />
+      </View>
+
+      <Animated.View
+        style={[styles.fakeTabBar, { opacity: fadeTabAnim, transform: [{ translateY: slideTabAnim }] }]}
+      >
+        <Pressable style={styles.tabButton} onPress={() => navigation.navigate('Calculator')}>
+          <MaterialCommunityIcons name="calculator-variant" size={26} color="#00e676" />
+        </Pressable>
+        <Pressable style={styles.tabButton} onPress={() => navigation.navigate('Converter')}>
+          <MaterialCommunityIcons name="currency-usd" size={26} color="#aaa" />
+        </Pressable>
+      </Animated.View>
+
+      <Modal
+        animationType="fade"
+        transparent
+        visible={modalVisible}
+        onRequestClose={() => setModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalView}>
+            <Text style={styles.modalTitle}>Name this calculation</Text>
+            <TextInput
+              style={styles.modalInput}
+              value={tempName}
+              onChangeText={setTempName}
+              placeholder="Enter name"
+              placeholderTextColor="#888"
+            />
+            <TouchableOpacity style={styles.modalButton} onPress={handleSaveName}>
+              <Text style={styles.modalButtonText}>Save</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 };
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#121212' },
-  scrollContainer: { paddingBottom: 80 },
-  displayContainer: { padding: 20, alignItems: 'flex-end' },
-  inputText: { color: '#fff', fontWeight: '600' },
-  resultText: { color: '#81c784', fontSize: 32, fontWeight: '600' },
-  buttonGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', padding: 10 },
-  calcButton: { width: '22%', padding: 18, margin: 5, backgroundColor: '#1e1e1e', borderRadius: 12, alignItems: 'center' },
-  calcButtonText: { color: '#fff', fontSize: 24 },
-  historyPanel: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: '#1e1e1e', borderTopLeftRadius: 16, borderTopRightRadius: 16 },
-  panelTitle: { fontSize: 18, fontWeight: '600', color: '#fff', padding: 16 },
-  historyContent: { paddingHorizontal: 16 },
-  shareButton: { padding: 12, backgroundColor: '#0288d1', borderRadius: 8, margin: 16, alignItems: 'center' },
-  shareButtonText: { color: '#fff', fontWeight: '600' },
-  modalBackground: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
-  modalContainer: { backgroundColor: '#1e1e1e', padding: 20, borderRadius: 16, width: '80%' },
-  modalTitle: { color: '#fff', fontSize: 18, marginBottom: 12 },
-  modalInput: { backgroundColor: '#121212', color: '#fff', padding: 12, borderRadius: 8, marginBottom: 16 },
-  modalButton: { backgroundColor: '#0288d1', padding: 12, borderRadius: 8, alignItems: 'center' },
-  modalButtonText: { color: '#fff', fontWeight: '600' },
-});
-
 export default Calculator;
-// ...styles remain unchanged, as in your original file...
-// Styles remain unchanged
+
+// Styles remain unchanged except grid and removal of pullDash styles
 const styles = StyleSheet.create({
   safeContainer: { flex: 1, backgroundColor: '#000' },
   blurHeader: { position: 'absolute', top: 0, left: 0, right: 0, height: 60, zIndex: 5 },
   container: { flex: 1, justifyContent: 'flex-end' },
-  display: { minHeight: 180, paddingHorizontal: 10, marginBottom: 20 },
+  display: { minHeight: 100, paddingHorizontal: 10, marginBottom: 4, marginTop: 20 },
   fixedIconRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -697,8 +946,8 @@ const styles = StyleSheet.create({
   },
   inputWrapper: { flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', minHeight: 60 },
   inputText: { color: '#fff', fontFamily: 'monospace', width: '100%', textAlignVertical: 'center' },
-  resultText: { color: '#ff9500', fontSize: 24, textAlign: 'right', marginTop: 6 },
-  grid: {},
+  resultText: { color: '#ff9500', fontSize: 24, textAlign: 'right', paddingBottom:8, marginTop: 6 },
+  grid: {paddingBottom:0},
   row: { flexDirection: 'row', justifyContent: 'space-between' },
   button: {
     flex: 1,
@@ -787,6 +1036,11 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     fontSize: 16,
   },
+  bannerAdContainer: {
+    width: '100%',
+    alignItems: 'center',
+    zIndex: 9,
+  },
 });
 
 const historyStyles = StyleSheet.create({
@@ -796,7 +1050,8 @@ const historyStyles = StyleSheet.create({
     left: 0,
     right: 0,
     backgroundColor: '#121212',
-    zIndex: 15,
+    // removed direct reference to panelOpen here (panelOpen is component state and not available at style creation time)
+    zIndex: 0,
     borderBottomLeftRadius: 20,
     borderBottomRightRadius: 20,
     overflow: 'hidden',
@@ -817,7 +1072,7 @@ const historyStyles = StyleSheet.create({
     borderTopRightRadius: 20,
     zIndex: 9,
   },
-  headerIcon: { padding: 7, borderRadius: 17 },
+  headerIcon: { padding: 7,paddingTop:10, borderRadius: 17 },
   searchInput: {
     flex: 1,
     height: 40,
@@ -857,20 +1112,6 @@ const historyStyles = StyleSheet.create({
     fontSize: 16,
     color: '#fff',
     fontWeight: '500',
-  },
-  pullDashContainer: {
-    position: 'absolute',
-    bottom: 40,
-    width: '100%',
-    alignItems: 'center',
-    backgroundColor: '#121212',
-  },
-  pullDash: {
-    width: 60,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: '#FFFDD0',
-    marginVertical: 12,
   },
   historyScroll: {
     paddingHorizontal: 10,
