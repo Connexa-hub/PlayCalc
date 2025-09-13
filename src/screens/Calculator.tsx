@@ -29,6 +29,7 @@ import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import BannerAd from '../components/BannerAd';
 import { showInterstitial } from '../components/InterstitialAd';
+import { showRewarded } from '../components/RewardedAd'; // Added import for RewardedAd
 
 const math = create(all);
 const { height: SCREEN_HEIGHT, width: SCREEN_WIDTH } = Dimensions.get('screen');
@@ -262,7 +263,7 @@ export const SwipeableHistoryItem: React.FC<SwipeableHistoryItemProps> = ({
   );
 };
 
-// ------ Banner Ad logic ------
+// ------ Banner Ad logic ------ // BANNER AD LOGIC: Defines constants for banner ad placement in history
 const HISTORY_BANNER_INSERT_CHANCE = 0.3; // 30% chance to show banner in history scroll
 const HISTORY_BANNER_MAX = 2; // Max 2 banners per history scroll
 const HISTORY_BANNER_PLACE_MAX = 20; // Only show banner if history length is at least 5
@@ -311,7 +312,7 @@ const Calculator: React.FC = () => {
   const inputRef = useRef<TextInput | null>(null);
   const [selection, setSelection] = useState<{ start: number; end: number } | null>(null);
 
-  // --- Interstitial ad evaluation count ---
+  // --- Evaluation count for rewarded ad ---
   const [evalCount, setEvalCount] = useState(0);
 
   useEffect(() => {
@@ -521,7 +522,7 @@ const Calculator: React.FC = () => {
     }
   };
 
-  // ---- Interstitial Ad logic ----
+  // ------ Rewarded Ad after 6 evaluations ------
   const handleEquals = () => {
     try {
       const expression = input.replace(/×/g, '*').replace(/÷/g, '/');
@@ -533,7 +534,7 @@ const Calculator: React.FC = () => {
       setEvalCount(prev => {
         const next = prev + 1;
         if (next >= 6) {
-          showInterstitial();
+          showRewarded(); // REWARDED AD: Shown after 6 evaluations
           return 0;
         }
         return next;
@@ -559,12 +560,14 @@ const Calculator: React.FC = () => {
     updateHistoryStorage();
   };
 
+  // ------ Rewarded Ad when saving calculation name ------
   const handleSaveName = () => {
     if (selectedIndex !== null) {
       const updated = [...history];
       updated[selectedIndex].name = tempName;
       setHistory(updated);
       updateHistoryStorage();
+      showRewarded(); // REWARDED AD: Shown when saving calculation with name
     }
     setModalVisible(false);
   };
@@ -578,15 +581,17 @@ const Calculator: React.FC = () => {
     lastTap.current = now;
   };
 
-  // OPEN / CLOSE using translateY (GPU accelerated)
+  // ------ Interstitial Ad when opening history panel ------
   const openPanel = () => {
-    // make sure panel visible/interactable before animating in
     setPanelOpen(true);
     Animated.timing(panelAnim, {
       toValue: 0,
       duration: 300,
       useNativeDriver: true,
     }).start();
+    if (Math.random() < 0.3) { // INTERSTITIAL AD: 30% chance when opening history panel
+      showInterstitial();
+    }
   };
 
   const closePanel = () => {
@@ -595,7 +600,6 @@ const Calculator: React.FC = () => {
       duration: 240,
       useNativeDriver: true,
     }).start(() => {
-      // Only set panelOpen to false after animation completes
       setPanelOpen(false);
     });
   };
@@ -604,7 +608,6 @@ const Calculator: React.FC = () => {
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
       onPanResponderGrant: () => {
-        // set initial from the JS-side latest value
         initialPanelValue.current = panelAnimValue.current ?? SCREEN_HEIGHT;
       },
       onPanResponderMove: (_, g) => {
@@ -614,11 +617,9 @@ const Calculator: React.FC = () => {
       onPanResponderRelease: (_, g) => {
         const threshold = SCREEN_HEIGHT * 0.3;
         const currentVal = panelAnimValue.current ?? 0;
-        // If the gesture pulls upward quickly, open the panel fully
         if (g.dy < -10 || g.vy < -0.1) {
           openPanel();
         } else if (currentVal > threshold || g.vy > 0.3) {
-          // translateY > threshold (moved down enough) -> close
           closePanel();
         } else {
           openPanel();
@@ -703,15 +704,13 @@ const Calculator: React.FC = () => {
     ['', '⌫', '=', ''],
   ];
 
-  // --- History Panel with stable banner ad insertion ---
-  // Memoize the mixedItems based on history and searchQuery so it doesn't change on every render.
+  // --- History Panel with stable banner ad insertion --- // BANNER AD LOGIC: Defines how banner ads are inserted in history scroll
   const getHistoryWithAdsStable = useMemo(() => {
     return (filteredHistory: HistoryEntry[]) => {
       if (filteredHistory.length < 5) return filteredHistory.map((h, idx) => ({ type: 'item', entry: h, idx }));
       const arr: { type: 'item' | 'ad'; entry?: HistoryEntry; idx?: number }[] = [];
       const maxBanner = Math.min(HISTORY_BANNER_MAX, Math.floor(filteredHistory.length / 5));
       const bannerPositions: number[] = [];
-      // generate deterministic-ish positions based on content length to avoid reshuffle each render
       for (let i = 1; i <= maxBanner; i++) {
         const sliceStart = (i - 1) * Math.floor(filteredHistory.length / maxBanner);
         const sliceEnd = Math.min(filteredHistory.length - 2, sliceStart + Math.floor(filteredHistory.length / maxBanner));
@@ -731,7 +730,7 @@ const Calculator: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // --- Banner Ad positioning: always absolute, adjust bottom based on tab visibility ---
+  // --- Banner Ad positioning: always absolute, adjust bottom based on tab visibility --- // BANNER AD LOGIC: Positioning for bottom banner ad
   const bannerAdBottomStyle = {
     position: 'absolute' as const,
     left: 0,
@@ -761,14 +760,13 @@ const Calculator: React.FC = () => {
         </View>
       )}
 
-      {/* --- History Panel with stable banner ad --- */}
+      {/* --- History Panel with stable banner ad --- */} // BANNER AD: Inserted within history scroll
       <Animated.View
         {...panelPanResponder.panHandlers}
         pointerEvents={panelOpen ? 'auto' : 'none'}
         style={[
           historyStyles.historyPanel,
           {
-            // keep panel full-screen height to avoid relayout; animate translateY
             height: SCREEN_HEIGHT,
             transform: [{ translateY: panelAnim }],
             zIndex: panelOpen ? 15 : -1,
@@ -790,7 +788,7 @@ const Calculator: React.FC = () => {
                 if (item.type === 'ad') {
                   return (
                     <View key={`banner-history-${i}`} style={{ marginVertical: 9, alignItems: 'center' }}>
-                      <BannerAd style={{}} />
+                      <BannerAd style={{}} /> {/* BANNER AD: Inserted in history scroll */}
                     </View>
                   );
                 } else if (item.type === 'item' && item.entry) {
@@ -819,7 +817,6 @@ const Calculator: React.FC = () => {
         </ScrollView>
       </Animated.View>
 
-      {/* Key: Container with dynamic paddingBottom to make space for ad and tab */}
       <View style={[styles.container, { paddingBottom: containerPaddingBottom }]}>
         <Pressable style={styles.display} onPress={handleDoubleTap}>
           <View style={styles.inputWrapper}>
@@ -846,7 +843,6 @@ const Calculator: React.FC = () => {
           </Animated.Text>
         </Pressable>
 
-        {/* Key: Grid with dynamic paddingHorizontal to reduce button size when tab visible */}
         <View style={[styles.grid, { paddingHorizontal: gridPaddingHorizontal }]}>
           {BUTTONS.map((row, i) => (
             <View key={i} style={styles.row}>
@@ -883,7 +879,7 @@ const Calculator: React.FC = () => {
         </View>
       </View>
 
-      {/* Banner Ad always absolute, positioned based on tab visibility */}
+      {/* ------ Bottom Banner Ad ------ */} // BANNER AD: Positioned at bottom, adjusts for tab visibility
       <View style={[styles.bannerAdContainer, bannerAdBottomStyle]}>
         <BannerAd style={{ alignSelf: 'center' }} />
       </View>
@@ -927,7 +923,6 @@ const Calculator: React.FC = () => {
 
 export default Calculator;
 
-// Styles remain unchanged except grid and removal of pullDash styles
 const styles = StyleSheet.create({
   safeContainer: { flex: 1, backgroundColor: '#000' },
   blurHeader: { position: 'absolute', top: 0, left: 0, right: 0, height: 60, zIndex: 5 },
@@ -1050,7 +1045,6 @@ const historyStyles = StyleSheet.create({
     left: 0,
     right: 0,
     backgroundColor: '#121212',
-    // removed direct reference to panelOpen here (panelOpen is component state and not available at style creation time)
     zIndex: 0,
     borderBottomLeftRadius: 20,
     borderBottomRightRadius: 20,

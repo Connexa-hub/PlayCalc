@@ -1,4 +1,4 @@
-name: EAS Build APK (Preview)
+name: EAS Build APK (Production APK)
 
 on:
   push:
@@ -25,7 +25,7 @@ jobs:
       - name: Install EAS CLI
         run: yarn global add eas-cli
 
-      - name: Build APK with EAS (Preview)
+      - name: Build APK with EAS (Production APK)
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
-        run: eas build --platform android --profile preview --non-interactive
+        run: eas build --platform android --profile production-apk --non-interactive
