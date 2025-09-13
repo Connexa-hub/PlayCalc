@@ -24,9 +24,6 @@ export default ({ config }) => ({
       backgroundColor: "#000000",
     },
     edgeToEdgeEnabled: true,
-    config: {
-      googleMobileAdsAppId: process.env.AD_APP_ID, // REQUIRED for Android build
-    },
   },
   web: {
     favicon: "./assets/favicon.png",
@@ -35,8 +32,22 @@ export default ({ config }) => ({
     [
       "react-native-google-mobile-ads",
       {
-        androidAppId: process.env.AD_APP_ID, // pulled from EAS secret
-        iosAppId: process.env.AD_APP_ID,     // if you add iOS later
+        androidAppId: process.env.AD_APP_ID,
+        iosAppId: process.env.AD_APP_ID,
+      },
+    ],
+    [
+      "expo-build-properties",
+      {
+        android: {
+          // This adds the tools:replace automatically for the meta-data conflict
+          extraMetaData: {
+            "com.google.android.gms.ads.DELAY_APP_MEASUREMENT_INIT": {
+              value: "false",
+              toolsReplace: "android:value",
+            },
+          },
+        },
       },
     ],
   ],
