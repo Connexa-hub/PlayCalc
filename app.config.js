@@ -24,6 +24,9 @@ export default ({ config }) => ({
       backgroundColor: "#000000",
     },
     edgeToEdgeEnabled: true,
+    config: {
+      googleMobileAdsAppId: process.env.AD_APP_ID, // REQUIRED for Android build
+    },
   },
   web: {
     favicon: "./assets/favicon.png",

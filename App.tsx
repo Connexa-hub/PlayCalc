@@ -14,6 +14,10 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import * as SplashScreen from 'expo-splash-screen';
 
+// 🟢 new imports
+import mobileAds, { AppOpenAd, TestIds } from 'react-native-google-mobile-ads';
+import Constants from 'expo-constants';
+
 import Calculator from './src/screens/Calculator';
 import ProfessionalCalculator from './src/screens/ProfessionalCalculator';
 import MainConverterScreen from './src/screens/MainConverterScreen';
@@ -24,12 +28,6 @@ import DedicationScreen from './src/screens/DedicationScreen';
 import PrivacyTermsScreen from './src/screens/PrivacyTermsScreen';
 import TutorialScreen from './src/screens/TutorialScreen';
 import { CurrencyProvider } from './src/context/CurrencyContext';
-
-/**
- * NOTE: moved preventAutoHideAsync into bootstrapAsync inside useEffect and await it.
- * This avoids possible unhandled promise behavior at module load time and gives
- * us better control/fallbacks for hiding the native splash.
- */
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
@@ -137,21 +135,17 @@ export default function App() {
     let mounted = true;
 
     const bootstrapAsync = async () => {
-      // 1) prevent auto hide for the native splash (await and catch)
       try {
         await SplashScreen.preventAutoHideAsync();
       } catch (err) {
-        // non-fatal; log so we can see issues in development
         console.warn('preventAutoHideAsync failed (ignored):', err);
       }
 
-      // 2) determine initial route from AsyncStorage synchronously in this flow
       try {
         const dedicationDone = await AsyncStorage.getItem('dedicationDone');
         const privacyDone = await AsyncStorage.getItem('privacyDone');
         const tutorialDone = await AsyncStorage.getItem('tutorialDone');
 
-        // decide route locally then set state once
         let route = 'Tabs';
         if (!dedicationDone) route = 'Dedication';
         else if (!privacyDone) route = 'PrivacyTerms';
@@ -163,23 +157,18 @@ export default function App() {
         if (mounted) setInitialRoute('Dedication');
       }
 
-      // 3) short delay to let the custom splash animation be visible
       try {
         await new Promise(resolve => setTimeout(resolve, 1500));
       } catch (e) {
         console.warn('App loading delay error:', e);
       }
 
-      // 4) hide the native expo splash (we prevented auto hide earlier)
       try {
         await SplashScreen.hideAsync();
       } catch (e) {
-        // ignore - hideAsync may fail if already hidden; log for debugging
         console.warn('Failed to hide native splash:', e);
       }
 
-      // 5) animate the main UI in. Use native driver = false to avoid
-      // potential platform issues that could prevent the callback from firing.
       Animated.timing(slideAnim, {
         toValue: 1,
         duration: 400,
@@ -188,14 +177,29 @@ export default function App() {
         if (mounted) setReady(true);
       });
 
-      // safety fallback: if animation callback doesn't fire for any reason,
-      // ensure the app becomes ready after a max timeout.
       setTimeout(() => {
         if (mounted) setReady(true);
       }, 1500);
     };
 
     bootstrapAsync();
+
+    // 🟢 Initialize AdMob after splash
+    setTimeout(() => {
+      const adAppId = Constants.expoConfig?.extra?.AD_APP_ID;
+      mobileAds()
+        .initialize()
+        .then(adapterStatuses => {
+          console.log('AdMob initialized ✅', adapterStatuses);
+        });
+
+      // Example: preload an AppOpenAd (optional)
+      const rewardedId = Constants.expoConfig?.extra?.AD_REWARDED_ID;
+      if (rewardedId) {
+        const appOpenAd = AppOpenAd.createForAdRequest(rewardedId);
+        appOpenAd.load();
+      }
+    }, 2000);
 
     return () => {
       mounted = false;
@@ -221,7 +225,6 @@ export default function App() {
               ]}
             >
               <NavigationContainer theme={MyDarkTheme}>
-                {/* initialRoute will be set before we mark ready (or fallback to Tabs) */}
                 {initialRoute && <MainStack initialRoute={initialRoute} />}
               </NavigationContainer>
             </Animated.View>
