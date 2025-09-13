@@ -23,9 +23,9 @@ jobs:
         run: yarn install --frozen-lockfile
 
       - name: Install EAS CLI
-        run: yarn global add eas-cli
+        run: npm install --global eas-cli
 
-      - name: Build APK with EAS (Production APK)
+      - name: Build Production APK
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
         run: eas build --platform android --profile production-apk --non-interactive
