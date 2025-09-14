@@ -14,10 +14,6 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import * as SplashScreen from 'expo-splash-screen';
 
-// 🟢 new imports
-import mobileAds, { AppOpenAd, TestIds } from 'react-native-google-mobile-ads';
-import Constants from 'expo-constants';
-
 import Calculator from './src/screens/Calculator';
 import ProfessionalCalculator from './src/screens/ProfessionalCalculator';
 import MainConverterScreen from './src/screens/MainConverterScreen';
@@ -95,9 +91,7 @@ function TabNavigator() {
       <Tab.Screen
         name="Converter"
         component={ConverterStack}
-        options={{
-          tabBarStyle: { display: 'none', height: 0 },
-        }}
+        options={{ tabBarStyle: { display: 'none', height: 0 } }}
       />
     </Tab.Navigator>
   );
@@ -183,23 +177,6 @@ export default function App() {
     };
 
     bootstrapAsync();
-
-    // 🟢 Initialize AdMob after splash
-    setTimeout(() => {
-      const adAppId = Constants.expoConfig?.extra?.AD_APP_ID;
-      mobileAds()
-        .initialize()
-        .then(adapterStatuses => {
-          console.log('AdMob initialized ✅', adapterStatuses);
-        });
-
-      // Example: preload an AppOpenAd (optional)
-      const rewardedId = Constants.expoConfig?.extra?.AD_REWARDED_ID;
-      if (rewardedId) {
-        const appOpenAd = AppOpenAd.createForAdRequest(rewardedId);
-        appOpenAd.load();
-      }
-    }, 2000);
 
     return () => {
       mounted = false;

@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -15,7 +15,6 @@ import {
   Dimensions,
   Modal,
   AppState,
-  PanResponder,
 } from 'react-native';
 import { BlurView } from 'expo-blur';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
@@ -27,19 +26,17 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ScreenOrientation from 'expo-screen-orientation';
 import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
-import BannerAd from '../components/BannerAd';
-import { showInterstitial } from '../components/InterstitialAd';
-import { showRewarded } from '../components/RewardedAd'; // Added import for RewardedAd
+import { PanResponder } from 'react-native';
+// import BannerAd from '../components/BannerAd';
+// import { showInterstitial } from '../components/InterstitialAd';
 
 const math = create(all);
 const { height: SCREEN_HEIGHT, width: SCREEN_WIDTH } = Dimensions.get('screen');
 const TAB_HEIGHT = 50;
 
-// Key: Adjust this value to control the tiny gap between buttons-ad and ad-tab (or buttons-ad when tab hidden)
-const TINY_GAP = 1; // <<< Tweak this for more/less space (set to 0 for no space)
-
-// Key: Adjust this based on the actual height of your BannerAd component (e.g., 50 for standard banner ads)
-const AD_HEIGHT = 50; // <<< Tweak this if your ad height differs
+// Key: Adjust this value to control the tiny gap between buttons and tab (or bottom when tab hidden)
+// const TINY_GAP = 1; // <<< Tweak this for more/less space (set to 0 for no space)
+const TINY_GAP = 0; // Adjusted to 0 since ads are removed
 
 // Key: Adjust this value to add horizontal padding to the button grid when tab is visible, reducing button size to address space needs
 const BUTTON_REDUCTION_PADDING = 10; // <<< Tweak this to make buttons smaller when tab visible (higher value = smaller buttons)
@@ -142,14 +139,7 @@ export const SwipeableHistoryItem: React.FC<SwipeableHistoryItemProps> = ({
       onPanResponderGrant: () => {
         if (isRemoving) return;
         animX.stopAnimation();
-        // using internal value to set offset; this is acceptable at runtime
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const current: any = animX;
-        try {
-          current.setOffset(current._value);
-        } catch {
-          // fallback if _value is not available
-        }
+        animX.setOffset(animX['_value']);
         animX.setValue(0);
         setSwiping(null);
       },
@@ -263,10 +253,10 @@ export const SwipeableHistoryItem: React.FC<SwipeableHistoryItemProps> = ({
   );
 };
 
-// ------ Banner Ad logic ------ // BANNER AD LOGIC: Defines constants for banner ad placement in history
-const HISTORY_BANNER_INSERT_CHANCE = 0.3; // 30% chance to show banner in history scroll
-const HISTORY_BANNER_MAX = 2; // Max 2 banners per history scroll
-const HISTORY_BANNER_PLACE_MAX = 20; // Only show banner if history length is at least 5
+// // ------ Banner Ad logic ------
+// const HISTORY_BANNER_INSERT_CHANCE = 0.3; // 30% chance to show banner in history scroll
+// const HISTORY_BANNER_MAX = 2; // Max 2 banners per history scroll
+// const HISTORY_BANNER_PLACE_MAX = 20; // Only show banner if history length is at least 5
 
 const Calculator: React.FC = () => {
   const navigation = useNavigation();
@@ -289,31 +279,15 @@ const Calculator: React.FC = () => {
   const slideAnim = useRef(new Animated.Value(20)).current;
   const fadeTabAnim = useRef(new Animated.Value(0)).current;
   const slideTabAnim = useRef(new Animated.Value(TAB_HEIGHT)).current;
-
-  // PANEL ANIMATION: use translateY (closed = SCREEN_HEIGHT, open = 0)
-  const panelAnim = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
-  // keep a JS-side latest value via listener so pan responder logic can read it reliably
-  const panelAnimValue = useRef<number>(SCREEN_HEIGHT);
-  useEffect(() => {
-    const id = panelAnim.addListener(({ value }) => {
-      panelAnimValue.current = value;
-    });
-    return () => {
-      try {
-        panelAnim.removeListener(id);
-      } catch {}
-    };
-  }, [panelAnim]);
-
-  const initialPanelValue = useRef<number>(SCREEN_HEIGHT);
+  const panelAnim = useRef(new Animated.Value(0)).current;
+  const initialPanelValue = useRef(0);
 
   const lastTap = useRef<number | null>(null);
-  // ensure TextInput ref typing allows null
-  const inputRef = useRef<TextInput | null>(null);
+  const inputRef = useRef<TextInput>(null);
   const [selection, setSelection] = useState<{ start: number; end: number } | null>(null);
 
-  // --- Evaluation count for rewarded ad ---
-  const [evalCount, setEvalCount] = useState(0);
+  // // --- Interstitial ad evaluation count ---
+  // const [evalCount, setEvalCount] = useState(0);
 
   useEffect(() => {
     // === Hook Setup ===
@@ -380,8 +354,7 @@ const Calculator: React.FC = () => {
 
   useEffect(() => {
     if (inputRef.current) {
-      // Type assertion for setNativeProps availability
-      (inputRef.current as any).setNativeProps({ showSoftInputOnFocus: false });
+      inputRef.current.setNativeProps({ showSoftInputOnFocus: false });
     }
   }, []);
 
@@ -522,7 +495,7 @@ const Calculator: React.FC = () => {
     }
   };
 
-  // ------ Rewarded Ad after 6 evaluations ------
+  // ---- Interstitial Ad logic commented out ----
   const handleEquals = () => {
     try {
       const expression = input.replace(/×/g, '*').replace(/÷/g, '/');
@@ -531,14 +504,14 @@ const Calculator: React.FC = () => {
       setResult(formatNumberWithCommas(resultStr));
       saveToHistory(input, resultStr);
 
-      setEvalCount(prev => {
-        const next = prev + 1;
-        if (next >= 6) {
-          showRewarded(); // REWARDED AD: Shown after 6 evaluations
-          return 0;
-        }
-        return next;
-      });
+      // setEvalCount(prev => {
+      //   const next = prev + 1;
+      //   if (next >= 6) {
+      //     showInterstitial();
+      //     return 0;
+      //   }
+      //   return next;
+      // });
 
     } catch {
       setResult('Error');
@@ -560,14 +533,12 @@ const Calculator: React.FC = () => {
     updateHistoryStorage();
   };
 
-  // ------ Rewarded Ad when saving calculation name ------
   const handleSaveName = () => {
     if (selectedIndex !== null) {
       const updated = [...history];
       updated[selectedIndex].name = tempName;
       setHistory(updated);
       updateHistoryStorage();
-      showRewarded(); // REWARDED AD: Shown when saving calculation with name
     }
     setModalVisible(false);
   };
@@ -581,34 +552,29 @@ const Calculator: React.FC = () => {
     lastTap.current = now;
   };
 
-  // ------ Interstitial Ad when opening history panel ------
   const openPanel = () => {
     setPanelOpen(true);
     Animated.timing(panelAnim, {
-      toValue: 0,
-      duration: 300,
-      useNativeDriver: true,
-    }).start();
-    if (Math.random() < 0.3) { // INTERSTITIAL AD: 30% chance when opening history panel
-      showInterstitial();
-    }
-  };
-
-  const closePanel = () => {
-    Animated.timing(panelAnim, {
       toValue: SCREEN_HEIGHT,
-      duration: 240,
-      useNativeDriver: true,
-    }).start(() => {
-      setPanelOpen(false);
-    });
+      duration: 300,
+      useNativeDriver: false,
+    }).start();
+  };
+  const closePanel = () => {
+    setPanelOpen(false);
+    Animated.spring(panelAnim, {
+      toValue: 0,
+      bounciness: 8,
+      speed: 12,
+      useNativeDriver: false,
+    }).start();
   };
 
   const panelPanResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
       onPanResponderGrant: () => {
-        initialPanelValue.current = panelAnimValue.current ?? SCREEN_HEIGHT;
+        initialPanelValue.current = panelAnim._value;
       },
       onPanResponderMove: (_, g) => {
         const newVal = initialPanelValue.current + g.dy;
@@ -616,13 +582,12 @@ const Calculator: React.FC = () => {
       },
       onPanResponderRelease: (_, g) => {
         const threshold = SCREEN_HEIGHT * 0.3;
-        const currentVal = panelAnimValue.current ?? 0;
         if (g.dy < -10 || g.vy < -0.1) {
-          openPanel();
-        } else if (currentVal > threshold || g.vy > 0.3) {
           closePanel();
-        } else {
+        } else if (panelAnim._value > threshold || g.vy > 0.2) {
           openPanel();
+        } else {
+          closePanel();
         }
       },
     })
@@ -704,42 +669,45 @@ const Calculator: React.FC = () => {
     ['', '⌫', '=', ''],
   ];
 
-  // --- History Panel with stable banner ad insertion --- // BANNER AD LOGIC: Defines how banner ads are inserted in history scroll
-  const getHistoryWithAdsStable = useMemo(() => {
-    return (filteredHistory: HistoryEntry[]) => {
-      if (filteredHistory.length < 5) return filteredHistory.map((h, idx) => ({ type: 'item', entry: h, idx }));
-      const arr: { type: 'item' | 'ad'; entry?: HistoryEntry; idx?: number }[] = [];
-      const maxBanner = Math.min(HISTORY_BANNER_MAX, Math.floor(filteredHistory.length / 5));
-      const bannerPositions: number[] = [];
-      for (let i = 1; i <= maxBanner; i++) {
-        const sliceStart = (i - 1) * Math.floor(filteredHistory.length / maxBanner);
-        const sliceEnd = Math.min(filteredHistory.length - 2, sliceStart + Math.floor(filteredHistory.length / maxBanner));
-        const pos = Math.min(filteredHistory.length - 2, Math.max(2, Math.floor(sliceStart + (sliceEnd - sliceStart) / 2)));
-        bannerPositions.push(pos);
-      }
-      let inserts = 0;
-      for (let i = 0; i < filteredHistory.length; i++) {
-        if (bannerPositions.includes(i) && inserts < maxBanner) {
-          arr.push({ type: 'ad' });
-          inserts++;
-        }
-        arr.push({ type: 'item', entry: filteredHistory[i], idx: i });
-      }
-      return arr;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  // // --- History Panel with random banner ad insertion ---
+  // function getHistoryWithAds(filteredHistory: HistoryEntry[]) {
+  //   if (filteredHistory.length < 5) return filteredHistory.map((h, idx) => ({ type: 'item', entry: h, idx }));
 
-  // --- Banner Ad positioning: always absolute, adjust bottom based on tab visibility --- // BANNER AD LOGIC: Positioning for bottom banner ad
-  const bannerAdBottomStyle = {
-    position: 'absolute' as const,
-    left: 0,
-    right: 0,
-    bottom: tabVisible ? TAB_HEIGHT + TINY_GAP : 0,
-  };
+  //   let inserts = 0;
+  //   const arr: { type: 'item' | 'ad', entry?: HistoryEntry, idx?: number }[] = [];
+  //   const maxBanner = Math.min(HISTORY_BANNER_MAX, Math.floor(filteredHistory.length / 5));
+  //   let bannerPositions: number[] = [];
+  //   for (let i = 1; i <= maxBanner; i++) {
+  //     const sliceStart = (i - 1) * Math.floor(filteredHistory.length / maxBanner);
+  //     const sliceEnd = Math.min(filteredHistory.length - 2, sliceStart + Math.floor(filteredHistory.length / maxBanner));
+  //     const pos = Math.floor(Math.random() * (sliceEnd - sliceStart) + sliceStart + 2);
+  //     bannerPositions.push(pos);
+  //   }
+  //   for (let i = 0; i < filteredHistory.length; i++) {
+  //     if (bannerPositions.includes(i) && inserts < maxBanner) {
+  //       arr.push({ type: 'ad' });
+  //       inserts++;
+  //     }
+  //     arr.push({ type: 'item', entry: filteredHistory[i], idx: i });
+  //   }
+  //   return arr;
+  // }
 
-  // --- Container padding to prevent buttons overlapping ad/tab ---
-  const containerPaddingBottom = AD_HEIGHT + TINY_GAP + (tabVisible ? TAB_HEIGHT + TINY_GAP : 0);
+  // --- Simplified history rendering without ads ---
+  function getHistoryWithAds(filteredHistory: HistoryEntry[]) {
+    return filteredHistory.map((h, idx) => ({ type: 'item', entry: h, idx }));
+  }
+
+  // // --- Banner Ad positioning: always absolute, adjust bottom based on tab visibility ---
+  // const bannerAdBottomStyle = {
+  //   position: 'absolute',
+  //   left: 0,
+  //   right: 0,
+  //   bottom: tabVisible ? TAB_HEIGHT + TINY_GAP : 0,
+  // };
+
+  // --- Container padding to prevent buttons overlapping tab ---
+  const containerPaddingBottom = tabVisible ? TAB_HEIGHT + TINY_GAP : 0;
 
   // --- Grid horizontal padding to reduce button size when tab visible ---
   const gridPaddingHorizontal = tabVisible ? BUTTON_REDUCTION_PADDING : 0;
@@ -760,19 +728,8 @@ const Calculator: React.FC = () => {
         </View>
       )}
 
-      {/* --- History Panel with stable banner ad --- */} // BANNER AD: Inserted within history scroll
-      <Animated.View
-        {...panelPanResponder.panHandlers}
-        pointerEvents={panelOpen ? 'auto' : 'none'}
-        style={[
-          historyStyles.historyPanel,
-          {
-            height: SCREEN_HEIGHT,
-            transform: [{ translateY: panelAnim }],
-            zIndex: panelOpen ? 15 : -1,
-          },
-        ]}
-      >
+      {/* --- History Panel without ads --- */}
+      <Animated.View style={[historyStyles.historyPanel, { height: panelAnim }]}>
         {renderHistoryHeader()}
         <ScrollView style={historyStyles.historyScroll} contentContainerStyle={{ paddingBottom: 30 }}>
           {history.length === 0 ? (
@@ -783,15 +740,9 @@ const Calculator: React.FC = () => {
                 (h.name || h.input).toLowerCase().includes(searchQuery.toLowerCase())
               );
               const sortedHistory = [...filteredHistory].sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0));
-              const mixedItems = getHistoryWithAdsStable(sortedHistory);
+              const mixedItems = getHistoryWithAds(sortedHistory);
               return mixedItems.map((item, i) => {
-                if (item.type === 'ad') {
-                  return (
-                    <View key={`banner-history-${i}`} style={{ marginVertical: 9, alignItems: 'center' }}>
-                      <BannerAd style={{}} /> {/* BANNER AD: Inserted in history scroll */}
-                    </View>
-                  );
-                } else if (item.type === 'item' && item.entry) {
+                if (item.type === 'item' && item.entry) {
                   return (
                     <SwipeableHistoryItem
                       key={item.entry.id || item.entry.timestamp}
@@ -817,6 +768,7 @@ const Calculator: React.FC = () => {
         </ScrollView>
       </Animated.View>
 
+      {/* Key: Container with dynamic paddingBottom to make space for tab */}
       <View style={[styles.container, { paddingBottom: containerPaddingBottom }]}>
         <Pressable style={styles.display} onPress={handleDoubleTap}>
           <View style={styles.inputWrapper}>
@@ -833,7 +785,7 @@ const Calculator: React.FC = () => {
               showSoftInputOnFocus={false}
               underlineColorAndroid="transparent"
               selection={selection}
-              onSelectionChange={({ nativeEvent: { selection } }) => setSelection(selection)}
+              onSelectionChange={({ nativeEvent: { selection } }}) => setSelection(selection)}
             />
           </View>
           <Animated.Text
@@ -843,6 +795,7 @@ const Calculator: React.FC = () => {
           </Animated.Text>
         </Pressable>
 
+        {/* Key: Grid with dynamic paddingHorizontal to reduce button size when tab visible */}
         <View style={[styles.grid, { paddingHorizontal: gridPaddingHorizontal }]}>
           {BUTTONS.map((row, i) => (
             <View key={i} style={styles.row}>
@@ -879,10 +832,11 @@ const Calculator: React.FC = () => {
         </View>
       </View>
 
-      {/* ------ Bottom Banner Ad ------ */} // BANNER AD: Positioned at bottom, adjusts for tab visibility
+      {/* // Banner Ad commented out
       <View style={[styles.bannerAdContainer, bannerAdBottomStyle]}>
         <BannerAd style={{ alignSelf: 'center' }} />
       </View>
+      */}
 
       <Animated.View
         style={[styles.fakeTabBar, { opacity: fadeTabAnim, transform: [{ translateY: slideTabAnim }] }]}
@@ -923,13 +877,14 @@ const Calculator: React.FC = () => {
 
 export default Calculator;
 
+// Styles remain unchanged except removal of bannerAdContainer and adjustment of grid
 const styles = StyleSheet.create({
   safeContainer: { flex: 1, backgroundColor: '#000' },
   blurHeader: { position: 'absolute', top: 0, left: 0, right: 0, height: 60, zIndex: 5 },
   container: { flex: 1, justifyContent: 'flex-end' },
   display: { minHeight: 100, paddingHorizontal: 10, marginBottom: 4, marginTop: 20 },
   fixedIconRow: {
-    flexDirection: 'row',
+    flexDirection: 'row', 
     justifyContent: 'space-between',
     paddingHorizontal: 10,
     paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 16) : 16,
@@ -1031,11 +986,11 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     fontSize: 16,
   },
-  bannerAdContainer: {
-    width: '100%',
-    alignItems: 'center',
-    zIndex: 9,
-  },
+  // bannerAdContainer: {
+  //   width: '100%',
+  //   alignItems: 'center',
+  //   zIndex: 9,
+  // },
 });
 
 const historyStyles = StyleSheet.create({
@@ -1045,7 +1000,7 @@ const historyStyles = StyleSheet.create({
     left: 0,
     right: 0,
     backgroundColor: '#121212',
-    zIndex: 0,
+    zIndex: 15,
     borderBottomLeftRadius: 20,
     borderBottomRightRadius: 20,
     overflow: 'hidden',
@@ -1066,7 +1021,7 @@ const historyStyles = StyleSheet.create({
     borderTopRightRadius: 20,
     zIndex: 9,
   },
-  headerIcon: { padding: 7,paddingTop:10, borderRadius: 17 },
+  headerIcon: { padding: 7, borderRadius: 17 },
   searchInput: {
     flex: 1,
     height: 40,

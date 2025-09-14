@@ -29,33 +29,11 @@ export default ({ config }) => ({
     favicon: "./assets/favicon.png",
   },
   plugins: [
-    [
-      "react-native-google-mobile-ads",
-      {
-        androidAppId: process.env.AD_APP_ID,
-        iosAppId: process.env.AD_APP_ID,
-      },
-    ],
-    [
-      "expo-build-properties",
-      {
-        android: {
-          // This adds the tools:replace automatically for the meta-data conflict
-          extraMetaData: {
-            "com.google.android.gms.ads.DELAY_APP_MEASUREMENT_INIT": {
-              value: "false",
-              toolsReplace: "android:value",
-            },
-          },
-        },
-      },
-    ],
+    // <-- add this plugin
+    "expo-build-properties",
   ],
   extra: {
     API_KEY: process.env.API_KEY,
-    AD_BANNER_ID: process.env.AD_BANNER_ID,
-    AD_INTERSTITIAL_ID: process.env.AD_INTERSTITIAL_ID,
-    AD_REWARDED_ID: process.env.AD_REWARDED_ID,
     eas: {
       projectId: "f8436d95-c601-4813-b055-90f81ea85d6c",
     },
