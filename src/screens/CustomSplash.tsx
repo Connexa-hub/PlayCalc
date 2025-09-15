@@ -22,7 +22,6 @@ const CustomSplash = ({ onFinish, delayMs = 600, loop = false }) => {
   const slideAnim = useRef(new Animated.Value(50)).current;
   const lottieFade = useRef(new Animated.Value(0)).current;
   const parallaxY = useRef(new Animated.Value(0)).current;
-  const lottieRef = useRef(null);
 
   useEffect(() => {
     Animated.sequence([
@@ -32,13 +31,9 @@ const CustomSplash = ({ onFinish, delayMs = 600, loop = false }) => {
         Animated.timing(lottieFade, { toValue: 1, duration: 700, useNativeDriver: true }),
       ]),
     ]).start();
-
-    if (lottieRef.current) {
-      lottieRef.current.play();
-    }
   }, [fadeAnim, slideAnim, lottieFade]);
 
-  // Re-apply immersive and transparent nav when this screen mounts
+  // Re-apply immersive and transparent nav when this screen mounts (helpful after navigation)
   useEffect(() => {
     (async () => {
       try {
@@ -98,9 +93,8 @@ const CustomSplash = ({ onFinish, delayMs = 600, loop = false }) => {
             }}
           >
             <LottieView
-              ref={lottieRef}
               source={require('../../assets/playcalc-wave.json')}
-              autoPlay={false} // explicitly controlled
+              autoPlay
               loop={loop}
               onAnimationFinish={handleAnimationFinish}
               style={styles.lottie}
@@ -116,7 +110,7 @@ const CustomSplash = ({ onFinish, delayMs = 600, loop = false }) => {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: 'transparent' },
   background: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFillObject, // makes sure the image fills under system bars
     justifyContent: 'flex-end',
     alignItems: 'center',
   },
@@ -124,7 +118,7 @@ const styles = StyleSheet.create({
     width: '100%',
     alignItems: 'center',
     justifyContent: 'flex-end',
-    paddingBottom: 8,
+    paddingBottom: 8, // reduced so image reaches nav area
   },
   lottie: {
     width: width * 0.35,
@@ -138,4 +132,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default CustomSplash;s
+export default CustomSplash;;

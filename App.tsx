@@ -206,7 +206,7 @@ export default function App() {
               </NavigationContainer>
             </Animated.View>
           ) : (
-            <CustomSplash />
+            <CustomSplash onFinish={() => setReady(true)} />
           )}
         </PaperProvider>
       </CurrencyProvider>

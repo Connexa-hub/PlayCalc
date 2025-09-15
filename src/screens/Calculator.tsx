@@ -34,12 +34,8 @@ const math = create(all);
 const { height: SCREEN_HEIGHT, width: SCREEN_WIDTH } = Dimensions.get('screen');
 const TAB_HEIGHT = 50;
 
-// Key: Adjust this value to control the tiny gap between buttons and tab (or bottom when tab hidden)
-// const TINY_GAP = 1; // <<< Tweak this for more/less space (set to 0 for no space)
-const TINY_GAP = 0; // Adjusted to 0 since ads are removed
-
-// Key: Adjust this value to add horizontal padding to the button grid when tab is visible, reducing button size to address space needs
-const BUTTON_REDUCTION_PADDING = 10; // <<< Tweak this to make buttons smaller when tab visible (higher value = smaller buttons)
+const TINY_GAP = 0;
+const BUTTON_REDUCTION_PADDING = 10;
 
 interface HistoryEntry {
   id: string;
@@ -253,11 +249,6 @@ export const SwipeableHistoryItem: React.FC<SwipeableHistoryItemProps> = ({
   );
 };
 
-// // ------ Banner Ad logic ------
-// const HISTORY_BANNER_INSERT_CHANCE = 0.3; // 30% chance to show banner in history scroll
-// const HISTORY_BANNER_MAX = 2; // Max 2 banners per history scroll
-// const HISTORY_BANNER_PLACE_MAX = 20; // Only show banner if history length is at least 5
-
 const Calculator: React.FC = () => {
   const navigation = useNavigation();
   const [input, setInput] = useState<string>('');
@@ -286,14 +277,9 @@ const Calculator: React.FC = () => {
   const inputRef = useRef<TextInput>(null);
   const [selection, setSelection] = useState<{ start: number; end: number } | null>(null);
 
-  // // --- Interstitial ad evaluation count ---
-  // const [evalCount, setEvalCount] = useState(0);
-
   useEffect(() => {
-    // === Hook Setup ===
     const setup = async () => {
       try {
-        // Lock orientation to portrait when the component mounts
         await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP);
         await NavigationBar.setVisibilityAsync('hidden');
         await NavigationBar.setBehaviorAsync('overlay-swipe');
@@ -307,7 +293,6 @@ const Calculator: React.FC = () => {
 
     setup();
 
-    // Navigation focus listener to ensure portrait mode on screen focus
     const unsubscribe = navigation.addListener('focus', async () => {
       try {
         await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP);
@@ -316,12 +301,9 @@ const Calculator: React.FC = () => {
       }
     });
 
-    // === Hook Cleanup (return) ===
     return () => {
-      // Reset to portrait when unmounting
       ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP)
         .catch(error => console.error('Error resetting orientation on unmount:', error));
-      // Remove navigation listener
       unsubscribe();
     };
   }, [navigation]);
@@ -495,7 +477,6 @@ const Calculator: React.FC = () => {
     }
   };
 
-  // ---- Interstitial Ad logic commented out ----
   const handleEquals = () => {
     try {
       const expression = input.replace(/×/g, '*').replace(/÷/g, '/');
@@ -560,14 +541,16 @@ const Calculator: React.FC = () => {
       useNativeDriver: false,
     }).start();
   };
+
   const closePanel = () => {
-    setPanelOpen(false);
     Animated.spring(panelAnim, {
       toValue: 0,
       bounciness: 8,
       speed: 12,
       useNativeDriver: false,
-    }).start();
+    }).start(() => {
+      setPanelOpen(false);
+    });
   };
 
   const panelPanResponder = useRef(
@@ -669,47 +652,11 @@ const Calculator: React.FC = () => {
     ['', '⌫', '=', ''],
   ];
 
-  // // --- History Panel with random banner ad insertion ---
-  // function getHistoryWithAds(filteredHistory: HistoryEntry[]) {
-  //   if (filteredHistory.length < 5) return filteredHistory.map((h, idx) => ({ type: 'item', entry: h, idx }));
-
-  //   let inserts = 0;
-  //   const arr: { type: 'item' | 'ad', entry?: HistoryEntry, idx?: number }[] = [];
-  //   const maxBanner = Math.min(HISTORY_BANNER_MAX, Math.floor(filteredHistory.length / 5));
-  //   let bannerPositions: number[] = [];
-  //   for (let i = 1; i <= maxBanner; i++) {
-  //     const sliceStart = (i - 1) * Math.floor(filteredHistory.length / maxBanner);
-  //     const sliceEnd = Math.min(filteredHistory.length - 2, sliceStart + Math.floor(filteredHistory.length / maxBanner));
-  //     const pos = Math.floor(Math.random() * (sliceEnd - sliceStart) + sliceStart + 2);
-  //     bannerPositions.push(pos);
-  //   }
-  //   for (let i = 0; i < filteredHistory.length; i++) {
-  //     if (bannerPositions.includes(i) && inserts < maxBanner) {
-  //       arr.push({ type: 'ad' });
-  //       inserts++;
-  //     }
-  //     arr.push({ type: 'item', entry: filteredHistory[i], idx: i });
-  //   }
-  //   return arr;
-  // }
-
-  // --- Simplified history rendering without ads ---
   function getHistoryWithAds(filteredHistory: HistoryEntry[]) {
     return filteredHistory.map((h, idx) => ({ type: 'item', entry: h, idx }));
   }
 
-  // // --- Banner Ad positioning: always absolute, adjust bottom based on tab visibility ---
-  // const bannerAdBottomStyle = {
-  //   position: 'absolute',
-  //   left: 0,
-  //   right: 0,
-  //   bottom: tabVisible ? TAB_HEIGHT + TINY_GAP : 0,
-  // };
-
-  // --- Container padding to prevent buttons overlapping tab ---
   const containerPaddingBottom = tabVisible ? TAB_HEIGHT + TINY_GAP : 0;
-
-  // --- Grid horizontal padding to reduce button size when tab visible ---
   const gridPaddingHorizontal = tabVisible ? BUTTON_REDUCTION_PADDING : 0;
 
   return (
@@ -728,8 +675,21 @@ const Calculator: React.FC = () => {
         </View>
       )}
 
-      {/* --- History Panel without ads --- */}
-      <Animated.View style={[historyStyles.historyPanel, { height: panelAnim }]}>
+      {/* --- History Panel without ads, with glitch fix --- */}
+      <Animated.View
+        style={[
+          historyStyles.historyPanel,
+          {
+            height: panelAnim,
+            opacity: panelAnim.interpolate({
+              inputRange: [0, 60],
+              outputRange: [0, 1],
+              extrapolate: 'clamp',
+            }),
+            pointerEvents: panelOpen ? 'auto' : 'none',
+          },
+        ]}
+      >
         {renderHistoryHeader()}
         <ScrollView style={historyStyles.historyScroll} contentContainerStyle={{ paddingBottom: 30 }}>
           {history.length === 0 ? (
@@ -768,7 +728,6 @@ const Calculator: React.FC = () => {
         </ScrollView>
       </Animated.View>
 
-      {/* Key: Container with dynamic paddingBottom to make space for tab */}
       <View style={[styles.container, { paddingBottom: containerPaddingBottom }]}>
         <Pressable style={styles.display} onPress={handleDoubleTap}>
           <View style={styles.inputWrapper}>
@@ -785,7 +744,7 @@ const Calculator: React.FC = () => {
               showSoftInputOnFocus={false}
               underlineColorAndroid="transparent"
               selection={selection}
-              onSelectionChange={({ nativeEvent: { selection } }}) => setSelection(selection)}
+              onSelectionChange={({ nativeEvent: { selection } }) => setSelection(selection)}
             />
           </View>
           <Animated.Text
@@ -795,7 +754,6 @@ const Calculator: React.FC = () => {
           </Animated.Text>
         </Pressable>
 
-        {/* Key: Grid with dynamic paddingHorizontal to reduce button size when tab visible */}
         <View style={[styles.grid, { paddingHorizontal: gridPaddingHorizontal }]}>
           {BUTTONS.map((row, i) => (
             <View key={i} style={styles.row}>
@@ -833,9 +791,9 @@ const Calculator: React.FC = () => {
       </View>
 
       {/* // Banner Ad commented out
-      <View style={[styles.bannerAdContainer, bannerAdBottomStyle]}>
-        <BannerAd style={{ alignSelf: 'center' }} />
-      </View>
+      // <View style={[styles.bannerAdContainer, bannerAdBottomStyle]}>
+      //   <BannerAd style={{ alignSelf: 'center' }} />
+      // </View>
       */}
 
       <Animated.View
@@ -877,14 +835,13 @@ const Calculator: React.FC = () => {
 
 export default Calculator;
 
-// Styles remain unchanged except removal of bannerAdContainer and adjustment of grid
 const styles = StyleSheet.create({
   safeContainer: { flex: 1, backgroundColor: '#000' },
   blurHeader: { position: 'absolute', top: 0, left: 0, right: 0, height: 60, zIndex: 5 },
   container: { flex: 1, justifyContent: 'flex-end' },
   display: { minHeight: 100, paddingHorizontal: 10, marginBottom: 4, marginTop: 20 },
   fixedIconRow: {
-    flexDirection: 'row', 
+    flexDirection: 'row',
     justifyContent: 'space-between',
     paddingHorizontal: 10,
     paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 16) : 16,
