@@ -14,10 +14,9 @@ jobs:
         uses: actions/checkout@v3
 
       - name: Set up Node.js 20.19.4
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
-          node-version: '20.19.4'
-          cache: 'yarn'
+          node-version: 20.19.4
 
       - name: Set up JDK 17
         uses: actions/setup-java@v3
@@ -28,7 +27,16 @@ jobs:
       - name: Install dependencies (Yarn)
         run: yarn install --frozen-lockfile
 
-      - name: Build Production APK
+      - name: Install EAS CLI globally
+        run: npm install --global eas-cli
+
+      - name: Build Production APK with EAS
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
-        run: npx eas build --platform android --profile production-apk --non-interactive
+        run: eas build --platform android --profile production-apk --non-interactive
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: playcalc-apk
+          path: dist/*.apk
