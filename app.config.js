@@ -28,9 +28,7 @@ export default ({ config }) => ({
   web: {
     favicon: "./assets/favicon.png",
   },
-  plugins: [
-    "expo-build-properties",
-  ],
+  plugins: [],
   extra: {
     API_KEY: process.env.API_KEY,
     eas: {
