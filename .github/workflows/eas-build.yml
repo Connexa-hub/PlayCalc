@@ -1,4 +1,4 @@
-name: EAS Build APK (Production APK)
+name: EAS Build APK (Beta Release)
 
 on:
   push:
@@ -11,7 +11,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4   # ✅ updated
+        uses: actions/checkout@v4
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -19,7 +19,7 @@ jobs:
           node-version: 20.19.4
 
       - name: Set up JDK 17
-        uses: actions/setup-java@v4   # ✅ use latest version
+        uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: 17
@@ -33,10 +33,60 @@ jobs:
       - name: Build Production APK with EAS
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
-        run: eas build --platform android --profile production-apk --non-interactive
+        run: eas build --platform android --profile production-apk --non-interactive --output ./dist
 
       - name: Upload APK artifact
-        uses: actions/upload-artifact@v4   # ✅ updated
+        uses: actions/upload-artifact@v4
         with:
           name: playcalc-apk
           path: dist/*.apk
+
+      # ------------------ Auto Release Section ------------------
+      - name: Get latest tag
+        id: get_latest_tag
+        run: |
+          git fetch --tags
+          LATEST_TAG=$(git tag --list "v*-beta" --sort=-v:refname | head -n 1)
+          echo "LATEST_TAG=${LATEST_TAG}" >> $GITHUB_ENV
+
+      - name: Compute next beta version
+        id: next_version
+        run: |
+          if [ -z "$LATEST_TAG" ]; then
+            NEXT_TAG="v1.0.0-beta"
+          else
+            # Extract numeric parts
+            BASE=$(echo $LATEST_TAG | sed 's/-beta//')
+            IFS='.' read -r MAJOR MINOR PATCH <<< "$(echo $BASE | sed 's/v//')"
+            PATCH=$((PATCH+1))
+            NEXT_TAG="v$MAJOR.$MINOR.$PATCH-beta"
+          fi
+          echo "NEXT_TAG=$NEXT_TAG" >> $GITHUB_ENV
+          echo "Next beta tag will be $NEXT_TAG"
+
+      - name: Create GitHub Release
+        id: create_release
+        uses: actions/create-release@v1
+        with:
+          tag_name: ${{ env.NEXT_TAG }}
+          release_name: "PlayCalc Beta Release ${{ env.NEXT_TAG }}"
+          body: |
+            PlayCalc Beta Release ${{ env.NEXT_TAG }}
+            - Standard and professional calculator functions
+            - Save, search, pin, and export history
+            - Currency converter with real-time rates and news
+            - Hidden features via double-tap in main display
+            - Professional calculator accessible via display icon
+            - Animated Lottie wave effects
+            - License: All Rights Reserved (© 2025 Connexa)
+          draft: false
+          prerelease: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload APK to GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: dist/*.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
