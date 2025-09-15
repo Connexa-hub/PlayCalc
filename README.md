@@ -4,7 +4,7 @@ PlayCalc
 [![React Native](https://img.shields.io/badge/React%20Native-0.72.4-blue?logo=react)](https://reactnative.dev/)
 [![License](https://img.shields.io/badge/License-All%20Rights%20Reserved-red)](LICENSE)
 [![Version](https://img.shields.io/badge/version-1.0.0-blue)](https://github.com/your-username/PlayCalc/releases)
-[![Build](https://img.shields.io/badge/build-passing-brightgreen)](https://github.com/your-username/PlayCalc/actions)
+[![Build](https://img.shields.io/badge/build-passing-brightgreen)](https://github.com/Connexa-hub/PlayCalc/actions)
 
 ---
 
