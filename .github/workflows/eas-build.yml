@@ -5,6 +5,9 @@ on:
     branches:
       - main
 
+permissions:
+  contents: write   # ✅ allow creating releases & uploading assets
+
 jobs:
   eas-build:
     runs-on: ubuntu-latest
