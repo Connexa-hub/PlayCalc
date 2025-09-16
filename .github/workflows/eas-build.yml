@@ -5,9 +5,6 @@ on:
     branches:
       - main
 
-permissions:
-  contents: write   # ✅ Needed so workflow can create releases and upload artifacts
-
 jobs:
   eas-build:
     runs-on: ubuntu-latest
@@ -19,7 +16,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20.19.4
+          node-version: 20
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -33,18 +30,7 @@ jobs:
       - name: Install EAS CLI globally
         run: npm install --global eas-cli
 
-      - name: Build Production APK with EAS (local)
-        env:
-          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
-        run: eas build --platform android --profile production-apk --non-interactive --local --output ./dist
-
-      - name: Upload APK artifact (for CI)
-        uses: actions/upload-artifact@v4
-        with:
-          name: playcalc-apk
-          path: dist/*.apk
-
-      # ------------------ Auto Release Section ------------------
+      # 🏷️ Get latest tag
       - name: Get latest tag
         id: get_latest_tag
         run: |
@@ -52,6 +38,7 @@ jobs:
           LATEST_TAG=$(git tag --list "v*-beta" --sort=-v:refname | head -n 1)
           echo "LATEST_TAG=${LATEST_TAG}" >> $GITHUB_ENV
 
+      # 📌 Compute next beta version
       - name: Compute next beta version
         id: next_version
         run: |
@@ -63,10 +50,58 @@ jobs:
             PATCH=$((PATCH+1))
             NEXT_TAG="v$MAJOR.$MINOR.$PATCH-beta"
           fi
-          echo "NEXT_TAG=$NEXT_TAG" >> $GITHUB_ENV
-          echo "Next beta tag will be $NEXT_TAG"
 
-      - name: Create GitHub Release & Upload APK
+          # Expo needs "1.0.1" not "v1.0.1-beta"
+          APP_VERSION=$(echo $NEXT_TAG | sed 's/v//' | sed 's/-beta//')
+
+          # Version code: just use patch + 100 * minor + 10000 * major
+          IFS='.' read -r MAJOR MINOR PATCH <<< "$APP_VERSION"
+          VERSION_CODE=$((MAJOR*10000 + MINOR*100 + PATCH))
+
+          echo "NEXT_TAG=$NEXT_TAG" >> $GITHUB_ENV
+          echo "APP_VERSION=$APP_VERSION" >> $GITHUB_ENV
+          echo "VERSION_CODE=$VERSION_CODE" >> $GITHUB_ENV
+
+          echo "Next tag: $NEXT_TAG"
+          echo "App version: $APP_VERSION"
+          echo "Android versionCode: $VERSION_CODE"
+
+      # 📝 Update app.json with new version info
+      - name: Update app.json version
+        run: |
+          jq \
+            --arg version "$APP_VERSION" \
+            --argjson versionCode $VERSION_CODE \
+            '.expo.version=$version | .expo.android.versionCode=$versionCode' \
+            app.json > app.json.tmp
+          mv app.json.tmp app.json
+          cat app.json
+
+      # 🚀 Build APK in Expo Cloud
+      - name: Build Production APK with EAS
+        id: eas_build
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: |
+          BUILD_URL=$(eas build --platform android --profile production-apk --non-interactive --wait --json | jq -r '.[0].artifacts.buildUrl')
+          echo "BUILD_URL=$BUILD_URL" >> $GITHUB_ENV
+
+      # ⬇️ Download built APK and rename with version
+      - name: Download APK from Expo
+        run: |
+          mkdir -p dist
+          curl -L -o dist/PlayCalc-${{ env.NEXT_TAG }}.apk ${{ env.BUILD_URL }}
+
+      # 📦 Upload APK as GitHub Actions Artifact
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: playcalc-apk
+          path: dist/PlayCalc-${{ env.NEXT_TAG }}.apk
+
+      # 🚀 Create GitHub Release & attach APK
+      - name: Create GitHub Release
+        id: create_release
         uses: softprops/action-gh-release@v1
         with:
           tag_name: ${{ env.NEXT_TAG }}
@@ -80,7 +115,8 @@ jobs:
             - Professional calculator accessible via display icon
             - Animated Lottie wave effects
             - License: All Rights Reserved (© 2025 Connexa)
+          draft: false
           prerelease: true
-          files: dist/*.apk
+          files: dist/PlayCalc-${{ env.NEXT_TAG }}.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
