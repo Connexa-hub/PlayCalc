@@ -51,10 +51,8 @@ jobs:
             NEXT_TAG="v$MAJOR.$MINOR.$PATCH-beta"
           fi
 
-          # Expo needs "1.0.1" not "v1.0.1-beta"
           APP_VERSION=$(echo $NEXT_TAG | sed 's/v//' | sed 's/-beta//')
 
-          # Version code: just use patch + 100 * minor + 10000 * major
           IFS='.' read -r MAJOR MINOR PATCH <<< "$APP_VERSION"
           VERSION_CODE=$((MAJOR*10000 + MINOR*100 + PATCH))
 
@@ -62,20 +60,12 @@ jobs:
           echo "APP_VERSION=$APP_VERSION" >> $GITHUB_ENV
           echo "VERSION_CODE=$VERSION_CODE" >> $GITHUB_ENV
 
-          echo "Next tag: $NEXT_TAG"
-          echo "App version: $APP_VERSION"
-          echo "Android versionCode: $VERSION_CODE"
-
-      # 📝 Update app.json with new version info
-      - name: Update app.json version
+      # 📝 Patch app.config.js with new version info
+      - name: Update app.config.js version
         run: |
-          jq \
-            --arg version "$APP_VERSION" \
-            --argjson versionCode $VERSION_CODE \
-            '.expo.version=$version | .expo.android.versionCode=$versionCode' \
-            app.json > app.json.tmp
-          mv app.json.tmp app.json
-          cat app.json
+          sed -i "s/version:.*/version: '${APP_VERSION}',/" app.config.js
+          sed -i "s/versionCode:.*/versionCode: ${VERSION_CODE},/" app.config.js
+          cat app.config.js
 
       # 🚀 Build APK in Expo Cloud
       - name: Build Production APK with EAS
@@ -101,7 +91,6 @@ jobs:
 
       # 🚀 Create GitHub Release & attach APK
       - name: Create GitHub Release
-        id: create_release
         uses: softprops/action-gh-release@v1
         with:
           tag_name: ${{ env.NEXT_TAG }}
