@@ -5,6 +5,9 @@ on:
     branches:
       - main
 
+permissions:
+  contents: write   # ✅ Needed so workflow can create releases and upload artifacts
+
 jobs:
   eas-build:
     runs-on: ubuntu-latest
@@ -35,7 +38,7 @@ jobs:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
         run: eas build --platform android --profile production-apk --non-interactive --local --output ./dist
 
-      - name: Upload APK artifact
+      - name: Upload APK artifact (for CI)
         uses: actions/upload-artifact@v4
         with:
           name: playcalc-apk
@@ -55,7 +58,6 @@ jobs:
           if [ -z "$LATEST_TAG" ]; then
             NEXT_TAG="v1.0.0-beta"
           else
-            # Extract numeric parts
             BASE=$(echo $LATEST_TAG | sed 's/-beta//')
             IFS='.' read -r MAJOR MINOR PATCH <<< "$(echo $BASE | sed 's/v//')"
             PATCH=$((PATCH+1))
@@ -64,12 +66,11 @@ jobs:
           echo "NEXT_TAG=$NEXT_TAG" >> $GITHUB_ENV
           echo "Next beta tag will be $NEXT_TAG"
 
-      - name: Create GitHub Release
-        id: create_release
-        uses: actions/create-release@v1
+      - name: Create GitHub Release & Upload APK
+        uses: softprops/action-gh-release@v1
         with:
           tag_name: ${{ env.NEXT_TAG }}
-          release_name: "PlayCalc Beta Release ${{ env.NEXT_TAG }}"
+          name: "PlayCalc Beta Release ${{ env.NEXT_TAG }}"
           body: |
             PlayCalc Beta Release ${{ env.NEXT_TAG }}
             - Standard and professional calculator functions
@@ -79,14 +80,7 @@ jobs:
             - Professional calculator accessible via display icon
             - Animated Lottie wave effects
             - License: All Rights Reserved (© 2025 Connexa)
-          draft: false
           prerelease: true
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Upload APK to GitHub Release
-        uses: softprops/action-gh-release@v1
-        with:
           files: dist/*.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
