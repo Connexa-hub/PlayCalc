@@ -27,8 +27,9 @@ import * as ScreenOrientation from 'expo-screen-orientation';
 import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import { PanResponder } from 'react-native';
-// import BannerAd from '../components/BannerAd';
-// import { showInterstitial } from '../components/InterstitialAd';
+import BannerAd from '../components/BannerAd';
+import { showInterstitial } from '../components/InterstitialAd';
+import { showRewardedAd } from '../components/RewardedAd';
 
 const math = create(all);
 const { height: SCREEN_HEIGHT, width: SCREEN_WIDTH } = Dimensions.get('screen');
@@ -261,6 +262,7 @@ const Calculator: React.FC = () => {
   const [tempName, setTempName] = useState<string>('');
   const [menuVisible, setMenuVisible] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>('');
+  const [evalCount, setEvalCount] = useState(0);
 
   const MAX_FONT = 48;
   const MIN_FONT = 16;
@@ -485,14 +487,14 @@ const Calculator: React.FC = () => {
       setResult(formatNumberWithCommas(resultStr));
       saveToHistory(input, resultStr);
 
-      // setEvalCount(prev => {
-      //   const next = prev + 1;
-      //   if (next >= 6) {
-      //     showInterstitial();
-      //     return 0;
-      //   }
-      //   return next;
-      // });
+      setEvalCount(prev => {
+        const next = prev + 1;
+        if (next >= 6) {
+          showInterstitial();
+          return 0;
+        }
+        return next;
+      });
 
     } catch {
       setResult('Error');
@@ -522,6 +524,12 @@ const Calculator: React.FC = () => {
       updateHistoryStorage();
     }
     setModalVisible(false);
+  };
+
+  const handleWatchAdToSave = () => {
+    showRewardedAd(() => {
+      handleSaveName();
+    });
   };
 
   const handleDoubleTap = () => {
@@ -652,8 +660,19 @@ const Calculator: React.FC = () => {
     ['', '⌫', '=', ''],
   ];
 
-  function getHistoryWithAds(filteredHistory: HistoryEntry[]) {
-    return filteredHistory.map((h, idx) => ({ type: 'item', entry: h, idx }));
+  type MixedItem =
+    | { type: 'item'; entry: HistoryEntry; idx: number }
+    | { type: 'ad'; id: string };
+
+  function getHistoryWithAds(filteredHistory: HistoryEntry[]): MixedItem[] {
+    const itemsWithAds: MixedItem[] = [];
+    filteredHistory.forEach((h, idx) => {
+      itemsWithAds.push({ type: 'item', entry: h, idx });
+      if ((idx + 1) % 4 === 0) {
+        itemsWithAds.push({ type: 'ad', id: `ad-${idx}` });
+      }
+    });
+    return itemsWithAds;
   }
 
   const containerPaddingBottom = tabVisible ? TAB_HEIGHT + TINY_GAP : 0;
@@ -701,7 +720,7 @@ const Calculator: React.FC = () => {
               );
               const sortedHistory = [...filteredHistory].sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0));
               const mixedItems = getHistoryWithAds(sortedHistory);
-              return mixedItems.map((item, i) => {
+              return mixedItems.map(item => {
                 if (item.type === 'item' && item.entry) {
                   return (
                     <SwipeableHistoryItem
@@ -719,6 +738,12 @@ const Calculator: React.FC = () => {
                       setModalVisible={setModalVisible}
                       setTempName={setTempName}
                     />
+                  );
+                } else if (item.type === 'ad') {
+                  return (
+                    <View key={item.id} style={{ alignItems: 'center', marginVertical: 10 }}>
+                      <BannerAd />
+                    </View>
                   );
                 }
                 return null;
@@ -790,11 +815,9 @@ const Calculator: React.FC = () => {
         </View>
       </View>
 
-      {/* // Banner Ad commented out
-      // <View style={[styles.bannerAdContainer, bannerAdBottomStyle]}>
-      //   <BannerAd style={{ alignSelf: 'center' }} />
-      // </View>
-      */}
+      <View style={[styles.bannerAdContainer, { bottom: tabVisible ? TAB_HEIGHT + TINY_GAP : 0 }]}>
+        <BannerAd />
+      </View>
 
       <Animated.View
         style={[styles.fakeTabBar, { opacity: fadeTabAnim, transform: [{ translateY: slideTabAnim }] }]}
@@ -823,8 +846,8 @@ const Calculator: React.FC = () => {
               placeholder="Enter name"
               placeholderTextColor="#888"
             />
-            <TouchableOpacity style={styles.modalButton} onPress={handleSaveName}>
-              <Text style={styles.modalButtonText}>Save</Text>
+            <TouchableOpacity style={styles.modalButton} onPress={handleWatchAdToSave}>
+              <Text style={styles.modalButtonText}>Save with Ad</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -943,11 +966,12 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     fontSize: 16,
   },
-  // bannerAdContainer: {
-  //   width: '100%',
-  //   alignItems: 'center',
-  //   zIndex: 9,
-  // },
+  bannerAdContainer: {
+    position: 'absolute',
+    width: '100%',
+    alignItems: 'center',
+    zIndex: 9,
+  },
 });
 
 const historyStyles = StyleSheet.create({

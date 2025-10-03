@@ -15,6 +15,10 @@ export default ({ config }) => ({
   ios: {
     supportsTablet: true,
     icon: "./assets/icon.png", // Keep original icon for iOS homescreen
+    config: {
+      // replace with your own iOS AdMob App ID in EAS secrets
+      googleMobileAdsAppId: process.env.IOS_ADMOB_APP_ID || "ca-app-pub-3940256099942544~1458002511",
+    },
   },
   android: {
     package: "com.connexa.playcalc",
@@ -24,11 +28,15 @@ export default ({ config }) => ({
       backgroundColor: "#000000",
     },
     edgeToEdgeEnabled: true,
+    config: {
+      // replace with your own Android AdMob App ID in EAS secrets
+      googleMobileAdsAppId: process.env.ANDROID_ADMOB_APP_ID || "ca-app-pub-3940256099942544~3347511713",
+    },
   },
   web: {
     favicon: "./assets/favicon.png",
   },
-  plugins: [],
+  plugins: ["react-native-google-mobile-ads"],
   extra: {
     API_KEY: process.env.API_KEY,
     eas: {
