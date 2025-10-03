@@ -7,9 +7,7 @@ import { Platform } from 'react-native';
 
 const adUnitId = __DEV__
   ? TestIds.REWARDED
-  : Platform.OS === 'ios'
-  ? process.env.IOS_REWARDED_AD_UNIT_ID // your iOS ad unit ID
-  : process.env.ANDROID_REWARDED_AD_UNIT_ID; // your Android ad unit ID
+  : process.env.ADMOB_REWARDED_AD_ID;
 
 let rewarded = RewardedAd.createForAdRequest(adUnitId, {
   requestNonPersonalizedAdsOnly: true,

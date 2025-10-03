@@ -7,9 +7,7 @@ import { Platform } from 'react-native';
 
 const adUnitId = __DEV__
   ? TestIds.INTERSTITIAL
-  : Platform.OS === 'ios'
-  ? process.env.IOS_INTERSTITIAL_AD_UNIT_ID // your iOS ad unit ID
-  : process.env.ANDROID_INTERSTITIAL_AD_UNIT_ID; // your Android ad unit ID
+  : process.env.ADMOB_INTERSTITIAL_AD_ID;
 
 let interstitial = InterstitialAd.createForAdRequest(adUnitId, {
   requestNonPersonalizedAdsOnly: true,

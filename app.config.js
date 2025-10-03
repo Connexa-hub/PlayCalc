@@ -16,8 +16,7 @@ export default ({ config }) => ({
     supportsTablet: true,
     icon: "./assets/icon.png", // Keep original icon for iOS homescreen
     config: {
-      // replace with your own iOS AdMob App ID in EAS secrets
-      googleMobileAdsAppId: process.env.IOS_ADMOB_APP_ID || "ca-app-pub-3940256099942544~1458002511",
+      googleMobileAdsAppId: process.env.ADMOB_APP_ID,
     },
   },
   android: {
@@ -29,8 +28,7 @@ export default ({ config }) => ({
     },
     edgeToEdgeEnabled: true,
     config: {
-      // replace with your own Android AdMob App ID in EAS secrets
-      googleMobileAdsAppId: process.env.ANDROID_ADMOB_APP_ID || "ca-app-pub-3940256099942544~3347511713",
+      googleMobileAdsAppId: process.env.ADMOB_APP_ID,
     },
   },
   web: {
