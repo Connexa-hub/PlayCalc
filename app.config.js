@@ -16,7 +16,7 @@ export default ({ config }) => ({
     supportsTablet: true,
     icon: "./assets/icon.png", // Keep original icon for iOS homescreen
     config: {
-      googleMobileAdsAppId: process.env.ADMOB_APP_ID,
+      googleMobileAdsAppId: process.env.ADMOB_APP_ID || "ca-app-pub-3940256099942544~1458002511",
     },
   },
   android: {
@@ -28,7 +28,7 @@ export default ({ config }) => ({
     },
     edgeToEdgeEnabled: true,
     config: {
-      googleMobileAdsAppId: process.env.ADMOB_APP_ID,
+      googleMobileAdsAppId: process.env.ADMOB_APP_ID || "ca-app-pub-3940256099942544~3347511713",
     },
   },
   web: {
