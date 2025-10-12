@@ -32,8 +32,8 @@ export default ({ config }) => ({
     [
       "react-native-google-mobile-ads",
       {
-        androidAppId: process.env.ADMOB_ANDROID_APP_ID || "ca-app-pub-3940256099942544~3347511713", // Test ID
-        iosAppId: process.env.ADMOB_IOS_APP_ID || "ca-app-pub-3940256099942544~1458002511", // Test ID
+        androidAppId: process.env.ADMOB_ANDROID_APP_ID || "ca-app-pub-1825209738194679~8196313817",
+        iosAppId: process.env.ADMOB_IOS_APP_ID || "ca-app-pub-1825209738194679~8196313817",
       },
     ],
   ],

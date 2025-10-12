@@ -4,8 +4,8 @@ import { InterstitialAd, AdEventType, TestIds } from 'react-native-google-mobile
 const adUnitId = __DEV__
   ? TestIds.INTERSTITIAL
   : Platform.select({
-      ios: 'ca-app-pub-XXXXXXXXXXXXXXXX/YYYYYYYYYY', // Replace with your iOS ad unit ID
-      android: 'ca-app-pub-XXXXXXXXXXXXXXXX/YYYYYYYYYY', // Replace with your Android ad unit ID
+      ios: 'ca-app-pub-1825209738194679/1853394606',
+      android: 'ca-app-pub-1825209738194679/1853394606',
     }) || TestIds.INTERSTITIAL;
 
 const interstitial = InterstitialAd.createForAdRequest(adUnitId, {

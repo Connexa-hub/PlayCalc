@@ -5,8 +5,8 @@ import { BannerAd as AdMobBanner, BannerAdSize, TestIds } from 'react-native-goo
 const adUnitId = __DEV__
   ? TestIds.ADAPTIVE_BANNER
   : Platform.select({
-      ios: 'ca-app-pub-XXXXXXXXXXXXXXXX/YYYYYYYYYY', // Replace with your iOS ad unit ID
-      android: 'ca-app-pub-XXXXXXXXXXXXXXXX/YYYYYYYYYY', // Replace with your Android ad unit ID
+      ios: 'ca-app-pub-1825209738194679/1794556990',
+      android: 'ca-app-pub-1825209738194679/1794556990',
     }) || TestIds.ADAPTIVE_BANNER;
 
 interface BannerAdProps {

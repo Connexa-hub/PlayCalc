@@ -410,9 +410,10 @@ const ProfessionalCalculator: React.FC = () => {
     }
   };
 
-  const updateHistoryStorage = async () => {
+  const updateHistoryStorage = async (updatedHistory?: HistoryEntry[]) => {
+    const historyToSave = updatedHistory || history;
     try {
-      await AsyncStorage.setItem('calcHistory', JSON.stringify(history));
+      await AsyncStorage.setItem('calcHistory', JSON.stringify(historyToSave));
     } catch (error) {
       console.error('Error updating history:', error);
     }
@@ -691,14 +692,14 @@ const ProfessionalCalculator: React.FC = () => {
     const updated = [...history];
     updated.splice(index, 1);
     setHistory(updated);
-    updateHistoryStorage();
+    updateHistoryStorage(updated);
   };
 
   const handlePin = (index: number) => {
     const updated = [...history];
     updated[index].pinned = !updated[index].pinned;
     setHistory(updated);
-    updateHistoryStorage();
+    updateHistoryStorage(updated);
   };
 
   const handleSaveName = () => {
@@ -706,7 +707,7 @@ const ProfessionalCalculator: React.FC = () => {
       const updated = [...history];
       updated[selectedIndex].name = tempName;
       setHistory(updated);
-      updateHistoryStorage();
+      updateHistoryStorage(updated);
     }
     setModalVisible(false);
   };

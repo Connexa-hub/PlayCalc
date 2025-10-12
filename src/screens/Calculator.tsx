@@ -418,12 +418,21 @@ const Calculator: React.FC = () => {
   };
 
   const saveToHistory = async (expr: string, res: string) => {
-    if (!expr || !res || res === 'Error' || (history[0]?.input === expr && history[0]?.result === parseNumberWithCommas(res)))
+    if (!expr || !res || res === 'Error') return;
+    
+    const formattedResult = formatNumberWithCommas(res);
+    
+    if (history[0]?.input === expr && history[0]?.result === formattedResult) {
       return;
+    }
+    
+    const isSingleNumber = /^-?\d+\.?\d*$/.test(expr.replace(/,/g, ''));
+    if (isSingleNumber) return;
+    
     const timestamp = new Date().toLocaleString();
     const newEntry: HistoryEntry = {
       input: expr,
-      result: formatNumberWithCommas(res),
+      result: formattedResult,
       timestamp,
       pinned: false,
       name: '',
@@ -441,9 +450,10 @@ const Calculator: React.FC = () => {
     }
   };
 
-  const updateHistoryStorage = async () => {
+  const updateHistoryStorage = async (updatedHistory?: HistoryEntry[]) => {
+    const historyToSave = updatedHistory || history;
     try {
-      await AsyncStorage.setItem('calcHistory', JSON.stringify(history.map(entry => ({
+      await AsyncStorage.setItem('calcHistory', JSON.stringify(historyToSave.map(entry => ({
         ...entry,
         result: parseNumberWithCommas(entry.result)
       }))));
@@ -504,14 +514,14 @@ const Calculator: React.FC = () => {
     const updated = [...history];
     updated.splice(index, 1);
     setHistory(updated);
-    updateHistoryStorage();
+    updateHistoryStorage(updated);
   };
 
   const handlePin = (index: number) => {
     const updated = [...history];
     updated[index].pinned = !updated[index].pinned;
     setHistory(updated);
-    updateHistoryStorage();
+    updateHistoryStorage(updated);
   };
 
   const handleSaveName = () => {
@@ -519,7 +529,7 @@ const Calculator: React.FC = () => {
       const updated = [...history];
       updated[selectedIndex].name = tempName;
       setHistory(updated);
-      updateHistoryStorage();
+      updateHistoryStorage(updated);
     }
     setModalVisible(false);
   };
