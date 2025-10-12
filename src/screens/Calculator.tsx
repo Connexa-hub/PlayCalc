@@ -27,8 +27,8 @@ import * as ScreenOrientation from 'expo-screen-orientation';
 import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import { PanResponder } from 'react-native';
-// import BannerAd from '../components/BannerAd';
-// import { showInterstitial } from '../components/InterstitialAd';
+import BannerAd from '../components/BannerAd';
+import { showInterstitial } from '../components/InterstitialAd';
 
 const math = create(all);
 const { height: SCREEN_HEIGHT, width: SCREEN_WIDTH } = Dimensions.get('screen');
@@ -485,14 +485,14 @@ const Calculator: React.FC = () => {
       setResult(formatNumberWithCommas(resultStr));
       saveToHistory(input, resultStr);
 
-      // setEvalCount(prev => {
-      //   const next = prev + 1;
-      //   if (next >= 6) {
-      //     showInterstitial();
-      //     return 0;
-      //   }
-      //   return next;
-      // });
+      setEvalCount(prev => {
+        const next = prev + 1;
+        if (next >= 6) {
+          showInterstitial();
+          return 0;
+        }
+        return next;
+      });
 
     } catch {
       setResult('Error');
@@ -790,11 +790,9 @@ const Calculator: React.FC = () => {
         </View>
       </View>
 
-      {/* // Banner Ad commented out
-      // <View style={[styles.bannerAdContainer, bannerAdBottomStyle]}>
-      //   <BannerAd style={{ alignSelf: 'center' }} />
-      // </View>
-      */}
+      <View style={[styles.bannerAdContainer, bannerAdBottomStyle]}>
+        <BannerAd style={{ alignSelf: 'center' }} />
+      </View>
 
       <Animated.View
         style={[styles.fakeTabBar, { opacity: fadeTabAnim, transform: [{ translateY: slideTabAnim }] }]}
@@ -943,11 +941,11 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     fontSize: 16,
   },
-  // bannerAdContainer: {
-  //   width: '100%',
-  //   alignItems: 'center',
-  //   zIndex: 9,
-  // },
+  bannerAdContainer: {
+    width: '100%',
+    alignItems: 'center',
+    zIndex: 9,
+  },
 });
 
 const historyStyles = StyleSheet.create({

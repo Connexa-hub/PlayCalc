@@ -28,7 +28,15 @@ export default ({ config }) => ({
   web: {
     favicon: "./assets/favicon.png",
   },
-  plugins: [],
+  plugins: [
+    [
+      "react-native-google-mobile-ads",
+      {
+        androidAppId: process.env.ADMOB_ANDROID_APP_ID || "ca-app-pub-3940256099942544~3347511713", // Test ID
+        iosAppId: process.env.ADMOB_IOS_APP_ID || "ca-app-pub-3940256099942544~1458002511", // Test ID
+      },
+    ],
+  ],
   extra: {
     API_KEY: process.env.API_KEY,
     eas: {
