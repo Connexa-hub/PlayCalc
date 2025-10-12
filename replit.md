@@ -4,6 +4,26 @@
 
 PlayCalc is a multifunctional React Native mobile application built with Expo that combines a calculator with real-time currency conversion capabilities. The app features both standard and professional calculator modes, a comprehensive currency converter with live exchange rates, calculation history management, and currency news feeds. Users can save and name calculations, pin favorites, export history to CSV, and perform currency arithmetic with an intuitive interface.
 
+## Recent Changes (October 2025)
+
+### AdMob Integration
+- Integrated react-native-google-mobile-ads for monetization
+- Production AdMob IDs configured (App ID: ca-app-pub-1825209738194679~8196313817)
+- Banner ads display at bottom of calculator screen
+- Interstitial ads show after every 6 calculations
+- Test ads in development, production ads in release builds
+
+### Bug Fixes
+- **Critical History Bug**: Fixed async state issue where deleted/pinned/renamed history items would reappear
+  - Root cause: `updateHistoryStorage()` was using stale state due to async React updates
+  - Solution: Modified to accept optional parameter with fresh updated array
+  - Applied to both Calculator.tsx and ProfessionalCalculator.tsx
+- **Calculation Saving**: Improved to match professional calculator behavior
+  - No longer saves single numbers without operators
+  - Only saves actual calculations
+  - Prevents duplicate consecutive calculations
+- **Swipe Gestures**: Fixed to work reliably with corrected state management
+
 ## User Preferences
 
 Preferred communication style: Simple, everyday language.
@@ -55,13 +75,15 @@ Preferred communication style: Simple, everyday language.
 - Custom formatting with thousand separators
 
 **History Management**
-- Persistent history storage in AsyncStorage
-- Swipe-to-delete gesture support
-- Pin/unpin functionality for important calculations
+- Persistent history storage in AsyncStorage with fixed state synchronization
+- Swipe-to-delete gesture support (swipe left to delete)
+- Pin/unpin functionality for important calculations (swipe right to pin)
 - Custom naming for history entries
 - Search functionality across history
 - CSV export capability using expo-file-system and expo-sharing
 - Avatar generation for named entries using initials and color hashing
+- Professional calculator behavior: only saves calculations with operators, not single numbers
+- Prevents duplicate consecutive calculations from being saved
 
 **Screen Orientation**
 - Portrait mode for standard calculator
@@ -151,11 +173,15 @@ HistoryEntry {
 - Query Parameters: Currency keyword, language (en), category (business)
 
 **Google Mobile Ads (AdMob)**
-- Banner and interstitial ads integration
-- Configured via `react-native-google-mobile-ads` plugin
-- App IDs stored in `app.config.js` environment variables
-- Test IDs used in development mode
+- Banner and interstitial ads integration via react-native-google-mobile-ads (v15.8.0)
+- App ID: ca-app-pub-1825209738194679~8196313817
+- Banner Ad Unit ID: ca-app-pub-1825209738194679/1794556990
+- Interstitial Ad Unit ID: ca-app-pub-1825209738194679/1853394606
+- Rewarded Ad Unit ID: ca-app-pub-1825209738194679/1442384967 (not yet implemented)
+- Configured in app.config.js with environment variable fallbacks
+- Test ads in __DEV__ mode, production ads otherwise
 - Non-personalized ads enabled for privacy compliance
+- Banner displays at bottom of calculator, interstitials after 6 calculations
 
 ### Key Libraries
 
